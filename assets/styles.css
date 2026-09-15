@@ -9,12 +9,3 @@
 .tools-callout p{max-width:620px;color:var(--muted)}
 .tools-callout .button{margin-top:14px}
 @media(max-width:980px){.tools-callout{grid-template-columns:1fr}}
-.domain-section{background:var(--white)}
-.domain-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;border:1px solid var(--line);background:var(--line)}
-.domain-grid a{min-height:330px;padding:clamp(28px,3.5vw,46px);background:#faf9f5;text-decoration:none}
-.domain-grid a:hover,.domain-grid a:focus-visible{background:var(--green-soft)}
-.domain-grid span{display:block;margin-bottom:52px;color:var(--coral);font-family:var(--mono);font-size:.72rem;font-weight:800}
-.domain-grid h3{font-family:var(--serif);font-size:clamp(1.7rem,2.5vw,2.5rem);font-weight:400}
-.domain-grid p{color:var(--muted);font-size:.9rem}
-.domain-grid b{display:block;margin-top:28px;color:var(--green);font-size:.78rem}
-@media(max-width:980px){.domain-grid{grid-template-columns:1fr}.domain-grid a{min-height:auto}.domain-grid span{margin-bottom:26px}}
