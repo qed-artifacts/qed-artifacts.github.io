@@ -11,7 +11,8 @@ their individual GitHub identities; no personal account owns the site repository
 ## Repository boundaries
 
 - **This repository:** the public organizational website, open documentation,
-  and lightweight browser-only applications under `apps/`.
+  the serial Dictionary of Quality under `dictionary/`, and lightweight
+  browser-only applications under `apps/`.
 - **QED-AI Operations Hub:** a separate private/local repository for governance
   records, meeting data, signatures, source intake, and internal operations.
 - **Signing portal:** a separate restricted application because it accepts
@@ -20,6 +21,11 @@ their individual GitHub identities; no personal account owns the site repository
 Never copy private records, residential addresses, credentials, signatures,
 meeting recordings, unredacted filings, internal source corpora, or personal
 data into this repository or its build output.
+
+Dictionary pages are generated from exact authorized release manifests in the
+private `qed-artifacts/dictionary-of-quality` publication store. Only the
+public HTML is copied here. Original dictionary prose and constructed examples
+are offered under CC0 1.0; cited third-party works retain their own rights.
 
 ## Public-app structure
 
