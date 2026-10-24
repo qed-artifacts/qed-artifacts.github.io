@@ -43,3 +43,29 @@ must work as HTML, CSS, JavaScript, and public static assets. A tool that needs
 server-side processing, authentication, confidential inputs, durable writes,
 or an independent compliance boundary belongs in a separate repository and
 hosted service, with a catalog link from this site.
+
+## Released glossary page
+
+`dictionary/glossary/index.html` is generated from the public
+`qed-artifacts/dictionary-of-quality-content` catalog and exact, versioned
+objects. The private Dictionary store remains the editorial authority; only
+its approved, tagged GitHub releases enter this page. The page contains no
+private source records and is not an editable glossary store.
+
+After a new glossary publication is verified and its public commit tagged,
+check out that exact public content tag and run:
+
+```text
+node scripts/build-glossary-page.mjs --source PATH_TO_PUBLIC_CONTENT_CHECKOUT --tag GLOSSARY_TAG
+node scripts/build-glossary-page.mjs --source PATH_TO_PUBLIC_CONTENT_CHECKOUT --tag GLOSSARY_TAG --check
+```
+
+The compiler runs the public repository validator, confirms that the tag
+points at the checked-out commit, and creates the page from `catalog.json` and
+its referenced public JSON objects. Propose the generated change through a
+reviewed site pull request. Do not import unpublished objects or copy text
+from the private collection into this repository.
+
+The glossary compiler, search script, and page styling are offered under
+Apache-2.0 in `LICENSE-CODE`. Released glossary prose follows each public
+object's CC0-1.0 declaration.
