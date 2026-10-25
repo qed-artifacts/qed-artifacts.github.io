@@ -86,7 +86,8 @@ const html = `<!doctype html>
 `;
 const output = path.join(siteRoot, 'dictionary', 'glossary', 'index.html');
 if (check) {
-  if (await fs.readFile(output, 'utf8') !== html) throw Error('Generated glossary page differs from tagged public release');
+  const checkedOut = await fs.readFile(output, 'utf8');
+  if (checkedOut.replace(/\r\n/g, '\n') !== html) throw Error('Generated glossary page differs from tagged public release');
 } else {
   await fs.mkdir(path.dirname(output), { recursive: true });
   await fs.writeFile(output, html);
