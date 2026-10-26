@@ -1,5 +1,6 @@
 const input = document.querySelector('#term-search');
 const cards = [...document.querySelectorAll('.entry')];
+const routes = [...document.querySelectorAll('.term-route')];
 const status = document.querySelector('#search-status');
 const empty = document.querySelector('#no-results');
 const normalize = value => value.normalize('NFKD').toLocaleLowerCase().replace(/\p{Diacritic}/gu, '').trim();
@@ -12,6 +13,13 @@ input.addEventListener('input', () => {
     card.hidden = !matches;
     if (matches) shown += 1;
   }
-  status.textContent = `${shown} ${shown === 1 ? 'entry' : 'entries'} shown`;
-  empty.hidden = shown !== 0;
+  let routed = 0;
+  for (const route of routes) {
+    const headword = normalize(route.dataset.headword);
+    const matches = !!query && headword.includes(query);
+    route.hidden = !matches;
+    if (matches) routed += 1;
+  }
+  status.textContent = `${shown} ${shown === 1 ? 'entry' : 'entries'} shown${routed ? ` · ${routed} related ${routed === 1 ? 'term route' : 'term routes'}` : ''}`;
+  empty.hidden = shown !== 0 || routed !== 0;
 });
