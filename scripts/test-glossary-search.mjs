@@ -135,5 +135,7 @@ test('generated page groups every released entry under one alphabet section', ()
   assert.equal(entries.length, statedTotal);
   assert.equal(new Set(entries.map(match => match[1])).size, entries.length);
   assert.ok(groups.length > 1 && groups.length <= 27);
+  assert.equal([...html.matchAll(/<details class="letter-group"[^>]* open>/g)].length, 0,
+    'all alphabet groups begin collapsed');
   assert.match(html, /<div class="letter-entries">/);
 });
