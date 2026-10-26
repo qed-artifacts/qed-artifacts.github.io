@@ -14,6 +14,12 @@
   const endpoints = edge => edge.direction === 'target-to-source'
     ? [edge.target.object_id, edge.source.object_id]
     : [edge.source.object_id, edge.target.object_id];
+  const lineEnds = (a, b) => {
+    const distance = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+    const dx = (b.x - a.x) / distance, dy = (b.y - a.y) / distance;
+    return { x1: a.x + dx * 8, y1: a.y + dy * 8,
+      x2: b.x - dx * 12, y2: b.y - dy * 12 };
+  };
 
   function createMap(stage, graph, selectTerm) {
     const { size, nodes } = graph.constellation;
@@ -26,6 +32,14 @@
     const shell = element('div', 'constellation-shell');
     const svg = svgElement('svg', { viewBox: `0 0 ${size} ${size}`, 'aria-hidden': 'true',
       class: 'constellation-svg', preserveAspectRatio: 'xMidYMid meet' });
+    const defs = svgElement('defs');
+    for (const [id, fill] of [['glossary-meaning-arrow', '#f5bc72'],
+      ['glossary-reference-arrow', '#a9ccef']]) {
+      const marker = svgElement('marker', { id, viewBox: '0 0 10 10', refX: 9,
+        refY: 5, markerWidth: 8, markerHeight: 8, orient: 'auto' });
+      marker.append(svgElement('path', { d: 'M 1 1 L 9 5 L 1 9 z', fill }));
+      defs.append(marker);
+    }
     const background = svgElement('g', { class: 'constellation-background' });
     background.append(svgElement('circle', { cx: size / 2, cy: size / 2, r: 591, class: 'constellation-disc' }));
     for (const radius of [130, 250, 365, 446, 585])
@@ -39,7 +53,7 @@
       const [from, to] = endpoints(edge);
       const a = byId.get(from), b = byId.get(to);
       if (!a || !b) continue;
-      const line = svgElement('line', { x1: a.x, y1: a.y, x2: b.x, y2: b.y,
+      const line = svgElement('line', { ...lineEnds(a, b),
         class: `constellation-line${edge.modality === 'possible' ? ' possible' : ''}` });
       lines.append(line);
       lineById.set(edge.relation_id, line);
@@ -58,7 +72,7 @@
       dots.append(dot);
       dotById.set(point.id, dot);
     }
-    svg.append(background, lines, referenceLines, dots, labels);
+    svg.append(defs, background, lines, referenceLines, dots, labels);
     const detail = element('div', 'constellation-detail');
     shell.append(svg, detail);
     stage.replaceChildren(shell);
@@ -111,6 +125,7 @@
       const term = graph.terms[focus];
       const heading = element('div', 'constellation-detail-heading');
       heading.append(element('strong', '', term.headword));
+      if (term.scope) heading.append(element('span', 'focus-scope', term.scope));
       const link = element('a', '', 'Read definition');
       link.href = `#${focus}`;
       heading.append(link);
@@ -127,21 +142,33 @@
       detail.append(element('p', '', layer === 'navigation' ?
         `${directEdges.length} direct Studio draft ${directEdges.length === 1 ? 'reference route' : 'reference routes'} in the current filters. A route does not assert a conceptual relationship.` :
         `${directEdges.length} direct working ${directEdges.length === 1 ? 'relationship' : 'relationships'} in the current filters.`));
-      const list = element('ul', 'constellation-neighbors');
-      for (const edge of directEdges.slice(0, 40)) {
-        const [from, to] = endpoints(edge);
-        const other = from === focus ? to : from;
-        const item = element('li');
-        const button = element('button', '', graph.terms[other].headword);
-        button.type = 'button';
-        button.setAttribute('aria-label', `Focus map on ${graph.terms[other].headword}`);
-        button.addEventListener('click', () => selectTerm(other));
-        item.append(element('span', '', from === focus ? `→ ${edge.label}` : `← ${edge.label}`), button);
-        list.append(item);
+      const visibleDirect = directEdges.slice(0, 40);
+      for (const [outgoing, title] of [[true, 'From this term'], [false, 'To this term']]) {
+        const group = visibleDirect.filter(edge => (endpoints(edge)[0] === focus) === outgoing);
+        if (!group.length) continue;
+        const section = element('section', 'relation-direction-group');
+        section.append(element('h4', '', title));
+        const list = element('ul', 'constellation-neighbors');
+        for (const edge of group) {
+          const [from, to] = endpoints(edge);
+          const other = outgoing ? to : from;
+          const item = element('li');
+          const button = element('button', '', graph.terms[other].headword);
+          button.type = 'button';
+          button.setAttribute('aria-label', `Focus map on ${graph.terms[other].headword}`);
+          button.addEventListener('click', () => selectTerm(other));
+          item.append(element('span', 'neighbor-relation', `${outgoing ? '→' : '←'} ${edge.label}`), button);
+          if (graph.terms[other].scope) item.append(element('small', 'neighbor-scope', graph.terms[other].scope));
+          if (layer === 'meaning' && edge.modality === 'possible') {
+            item.append(element('em', 'possibility', 'possible in Studio'));
+          }
+          list.append(item);
+        }
+        section.append(list);
+        detail.append(section);
       }
-      detail.append(list);
       if (directEdges.length > 40) detail.append(element('p', '',
-        `Showing 40 neighboring terms here; all ${directEdges.length} routes remain in the searchable list below.`));
+        `Showing 40 links here; all ${directEdges.length} remain in the searchable list below.`));
     }
 
     function renderLabels(focus, directEdges) {
@@ -226,6 +253,8 @@
         const active = focus && (a === focus || b === focus);
         line.setAttribute('opacity', inNavigation || !visibleIds.has(edge.relation_id) ? 0 :
           !focus ? .14 : active ? .9 : distance.has(a) && distance.has(b) ? .055 : .025);
+        line.setAttribute('marker-end', !inNavigation && active && visibleIds.has(edge.relation_id) ?
+          'url(#glossary-meaning-arrow)' : 'none');
         line.classList.toggle('selected', Boolean(active));
       }
       referenceLines.replaceChildren();
@@ -233,8 +262,8 @@
         for (const edge of direct.slice(0, 60)) {
           const [from, to] = endpoints(edge);
           const a = byId.get(from), b = byId.get(to);
-          if (a && b) referenceLines.append(svgElement('line', { x1: a.x, y1: a.y,
-            x2: b.x, y2: b.y, class: 'constellation-reference-line' }));
+          if (a && b) referenceLines.append(svgElement('line', { ...lineEnds(a, b),
+            class: 'constellation-reference-line', 'marker-end': 'url(#glossary-reference-arrow)' }));
         }
       }
       if (focus) dots.append(dotById.get(focus));
