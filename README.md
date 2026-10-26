@@ -66,17 +66,20 @@ its referenced public JSON objects. Propose the generated change through a
 reviewed site pull request. Do not import unpublished objects or copy text
 from the private collection into this repository.
 
-When the tagged public content includes `relations/graph.v1.json`, the same
-compiler adds a cluster map, relation-type and term filters, and an accessible
-relation list above glossary search. All node labels, links, relation counts,
-and cluster membership come from that validated snapshot and the same catalog.
-Aliases remain a distinct navigation route. The graph may show isolated cluster
-members; it never infers missing edges. `node scripts/test-glossary-relations-page.mjs`
-builds a local eight-term synthetic fixture under `out/glossary-relations-fixture/`
-for UI checks; it is not public dictionary content. The `--output SITE_FILE`
+When the tagged public content includes `relations/studio-working.v1.json`,
+the compiler shows its owner-approved working relationships separately from
+the archived reviewed graph. The default map centers the most connected term
+and groups its direct incoming and outgoing relationships by predicate.
+Selecting a neighboring term refocuses the map; domain, predicate, and
+relationship search filter it and the full accessible relation list. The map
+focus does not narrow that list. All terms, links, counts, and relationship
+labels derive from the validated tagged public collection. Aliases remain
+distinct navigation routes. `node scripts/test-glossary-relations-page.mjs`
+builds a local synthetic fixture under `out/glossary-relations-fixture/` for
+UI checks; it is not public dictionary content. The `--output SITE_FILE`
 builder option permits a local preview without changing the canonical page.
 
-Released terms appear in collapsible A–Z sections. Search and cluster filters reveal matching sections; each compact term shows its definition, with explanation and version link on demand. At wider widths the term grid uses two or three columns. Alphabet links and object deep links open the relevant section. Run `node scripts/test-glossary-search.mjs` to check filtering, controls, and generated grouping.
+Released terms appear in collapsible A–Z sections. Search reveals matching sections; each compact term shows its definition, with explanation and version link on demand. At wider widths the term grid uses two or three columns. Alphabet links and object deep links open the relevant section. Run `node scripts/test-glossary-search.mjs` to check filtering, controls, and generated grouping.
 
 The glossary compiler, search script, and page styling are offered under
 Apache-2.0 in `LICENSE-CODE`. Released glossary prose follows each public

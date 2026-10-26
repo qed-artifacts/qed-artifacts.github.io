@@ -73,11 +73,13 @@ const graphData = JSON.stringify({ relations,
   terms: Object.fromEntries(objects.map(item => [item.object_id, { headword: item.headword, scope: item.scope_label }])) })
   .replace(/</g, '\\u003c');
 const relationRows = relations.map(edge => {
-  const from = byId.get(edge.source.object_id);
-  const to = byId.get(edge.target.object_id);
+  const fromId = edge.direction === 'target-to-source' ? edge.target.object_id : edge.source.object_id;
+  const toId = edge.direction === 'target-to-source' ? edge.source.object_id : edge.target.object_id;
+  const from = byId.get(fromId);
+  const to = byId.get(toId);
   if (!from || !to) throw Error(`Graph endpoint missing from current entries: ${edge.relation_id}`);
   return `<li class="relation-row" data-relation="${esc(edge.relation_id)}" data-domain="${esc(edge.domain)}" hidden>
-  <a href="#${esc(edge.source.object_id)}">${esc(from.headword)}</a> <span>${esc(edge.label)}</span> <a href="#${esc(edge.target.object_id)}">${esc(to.headword)}</a>
+  <a href="#${esc(fromId)}">${esc(from.headword)}</a> <span>${esc(edge.label)}</span> <a href="#${esc(toId)}">${esc(to.headword)}</a>
   </li>`;
 }).join('');
 const entries = objects.map(item => {
@@ -151,14 +153,13 @@ const html = `<!doctype html>
       <div class="explorer-controls">
         <label for="domain-filter">Domain <select id="domain-filter"><option value="">All domains</option>${domains.map(value => `<option value="${esc(value)}">${esc(value.replaceAll('-', ' '))}</option>`).join('')}</select></label>
         <label for="predicate-filter">Relation type <select id="predicate-filter"><option value="">All types</option>${predicates.map(value => `<option value="${esc(value)}">${esc(value.replaceAll('-', ' '))}</option>`).join('')}</select></label>
-        <label for="term-filter">Focus term <select id="term-filter"><option value="">All connected terms</option></select></label>
+        <label for="term-filter">Map focus <select id="term-filter"></select></label>
         <label for="relation-search">Find relationship <input id="relation-search" type="search" placeholder="Search terms or relation type" autocomplete="off"></label>
-        <label class="focus-toggle"><input type="checkbox" id="connected-only"> Show only connected terms</label>
+        <label class="focus-toggle"><input type="checkbox" id="connected-only"> Show only terms connected to the map focus</label>
       </div>
-      <div class="graph-stage" id="graph-stage" role="group" aria-label="Visual map of available relationships"></div>
-      <div class="graph-pages"><button type="button" id="graph-prev">Previous map section</button><span id="graph-page-status"></span><button type="button" id="graph-next">Next map section</button></div>
-      <p class="graph-caption" id="graph-caption">The map shows one bounded section at a time; the searchable list includes every matching relationship.</p>
-      <details class="relation-details" open><summary>Relationship list <span id="relation-count">0</span></summary><ul id="relation-list">${relationRows}</ul><p id="relation-empty">No relationships in this selection.</p></details>
+      <div class="graph-stage" id="graph-stage" role="group" aria-label="Relationships around a focused term"></div>
+      <p class="graph-caption" id="graph-caption">Choose a term to see its direct relationships. The searchable list includes every matching relationship.</p>
+      <details class="relation-details" id="relation-details"><summary>Browse all matching relationships <span id="relation-count">0</span></summary><ul id="relation-list">${relationRows}</ul><p id="relation-empty">No relationships in this selection.</p></details>
       <script type="application/json" id="graph-data">${graphData}</script>
     </section>
     <div class="browser"><label for="term-search">Find a term or topic</label><input id="term-search" type="search" placeholder="Search released entries" autocomplete="off" aria-describedby="search-status"><p id="search-status" role="status" aria-live="polite">${objects.length} ${objects.length === 1 ? 'entry' : 'entries'} available</p></div>

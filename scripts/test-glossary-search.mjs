@@ -8,7 +8,12 @@ import { fileURLToPath } from 'node:url';
 const script = fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)),
   '..', 'dictionary', 'glossary', 'search.js'), 'utf8');
 
-function interfaceFixture() {
+function interfaceFixture(graph = { relations: [], terms: {} }) {
+  const node = tagName => ({ tagName, children: [], attributes: {}, textContent: '',
+    append(...children) { this.children.push(...children); },
+    replaceChildren(...children) { this.children = children; },
+    setAttribute(name, value) { this.attributes[name] = value; },
+    addEventListener(name, fn) { this[name] = fn; } });
   const control = (value = '') => ({ value, checked: false, disabled: false,
     addEventListener(name, fn) { this[name] = fn; },
     replaceChildren() {}, add() {} });
@@ -28,21 +33,26 @@ function interfaceFixture() {
     '#predicate-filter': control(), '#domain-filter': control(),
     '#term-filter': control(), '#relation-search': control(), '#connected-only': control(),
     '#relation-status': { textContent: '' }, '#relation-count': { textContent: '' },
-    '#relation-empty': { hidden: true }, '#graph-stage': { replaceChildren() {} },
-    '#graph-caption': { textContent: '' }, '#graph-prev': control(),
-    '#graph-next': control(), '#graph-page-status': { textContent: '' },
+    '#relation-empty': { hidden: true }, '#relation-details': { open: false },
+    '#graph-stage': node('div'), '#graph-caption': { textContent: '' },
     '#expand-letters': control(), '#collapse-letters': control(),
-    '#graph-data': { textContent: JSON.stringify({ relations: [], terms: {} }) } };
+    '#graph-data': { textContent: JSON.stringify(graph) } };
+  const relationRows = graph.relations.map(edge => ({ dataset: { relation: edge.relation_id }, hidden: true }));
   const document = { querySelector: selector => nodes[selector],
     querySelectorAll: selector => selector === '.entry' ? cards : selector === '.term-route' ? routes :
-      selector === '.letter-group' ? groups : [] };
+      selector === '.letter-group' ? groups : selector === '.relation-row' ? relationRows : [],
+    createElement: node };
   const location = { href: 'https://example.test/dictionary/glossary/', search: '', hash: '' };
   vm.runInNewContext(script, { document, location, history: { replaceState() {} },
     window: { addEventListener() {} }, requestAnimationFrame: fn => fn(),
     URL, URLSearchParams, Option: function (label, value) { return { label, value }; } });
   return { input, cards, routes, status: nodes['#search-status'], empty: nodes['#no-results'],
     connected: nodes['#connected-only'], groups,
-    expand: nodes['#expand-letters'], collapse: nodes['#collapse-letters'] };
+    expand: nodes['#expand-letters'], collapse: nodes['#collapse-letters'],
+    term: nodes['#term-filter'], predicate: nodes['#predicate-filter'],
+    relationSearch: nodes['#relation-search'], relationCount: nodes['#relation-count'],
+    relationDetails: nodes['#relation-details'], stage: nodes['#graph-stage'],
+    caption: nodes['#graph-caption'], relationRows };
 }
 
 test('scoped term routes appear as navigation without becoming entry counts', () => {
@@ -73,6 +83,35 @@ test('letter controls expand and collapse the visible groups', () => {
   assert.equal(view.groups.every(group => group.open), true);
   view.collapse.click();
   assert.equal(view.groups.every(group => !group.open), true);
+});
+
+test('focused map follows edge direction while the list retains every matching relation', () => {
+  const endpoint = id => ({ object_id: id });
+  const graph = { terms: { a: { headword: 'Alpha' }, b: { headword: 'Beta' },
+    c: { headword: 'Gamma' } }, relations: [
+    { relation_id: 'one', source: endpoint('a'), target: endpoint('b'),
+      predicate: 'supports', label: 'supports', direction: 'source-to-target',
+      domain: 'one', modality: 'asserted' },
+    { relation_id: 'two', source: endpoint('c'), target: endpoint('b'),
+      predicate: 'qualifies', label: 'qualifies', direction: 'target-to-source',
+      domain: 'one', modality: 'possible' }
+  ] };
+  const view = interfaceFixture(graph);
+  assert.equal(view.term.value, 'b');
+  assert.match(view.stage.attributes['aria-label'], /Beta: 1 incoming and 1 outgoing/);
+  assert.equal(view.relationCount.textContent, '2');
+  view.term.value = 'c';
+  view.term.input();
+  assert.match(view.stage.attributes['aria-label'], /Gamma: 1 incoming and 0 outgoing/);
+  assert.equal(view.relationCount.textContent, '2');
+  view.predicate.value = 'supports';
+  view.predicate.input();
+  assert.match(view.stage.attributes['aria-label'], /Gamma: 0 incoming and 0 outgoing/);
+  assert.equal(view.relationCount.textContent, '1');
+  assert.deepEqual(view.relationRows.map(row => row.hidden), [false, true]);
+  view.relationSearch.value = 'alpha';
+  view.relationSearch.input();
+  assert.equal(view.relationDetails.open, true);
 });
 
 test('generated page groups every released entry under one alphabet section', () => {

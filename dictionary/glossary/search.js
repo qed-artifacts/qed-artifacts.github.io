@@ -12,86 +12,112 @@ const connectedOnly = document.querySelector('#connected-only');
 const relationStatus = document.querySelector('#relation-status');
 const relationCount = document.querySelector('#relation-count');
 const relationEmpty = document.querySelector('#relation-empty');
+const relationDetails = document.querySelector('#relation-details');
 const relationRows = [...document.querySelectorAll('.relation-row')];
 const stage = document.querySelector('#graph-stage');
 const caption = document.querySelector('#graph-caption');
-const graphPrev = document.querySelector('#graph-prev');
-const graphNext = document.querySelector('#graph-next');
-const graphPageStatus = document.querySelector('#graph-page-status');
 const graph = JSON.parse(document.querySelector('#graph-data').textContent);
 const normalize = value => value.normalize('NFKD').toLocaleLowerCase().replace(/\p{Diacritic}/gu, '').trim();
 const indexed = cards.map(card => [card, normalize(card.textContent)]);
-const byRelation = new Map(graph.relations.map(edge => [edge.relation_id, edge]));
 const params = new URLSearchParams(location.search);
-const pageSize = 24;
-let graphPage = Math.max(0, Number.parseInt(params.get('map') ?? '1', 10) - 1 || 0);
-const svgNS = 'http://www.w3.org/2000/svg';
-const svgElement = (tag, attributes = {}) => {
-  const element = document.createElementNS(svgNS, tag);
-  for (const [key, value] of Object.entries(attributes)) element.setAttribute(key, String(value));
-  return element;
-};
+const degree = new Map();
+for (const edge of graph.relations) {
+  for (const id of [edge.source.object_id, edge.target.object_id]) degree.set(id, (degree.get(id) || 0) + 1);
+}
+const connectedTerms = [...degree.keys()].sort((a, b) =>
+  graph.terms[a].headword.localeCompare(graph.terms[b].headword, 'en') || a.localeCompare(b));
+const defaultFocus = [...connectedTerms].sort((a, b) =>
+  degree.get(b) - degree.get(a) || graph.terms[a].headword.localeCompare(graph.terms[b].headword, 'en'))[0] || '';
 
-function draw(nodes, edges) {
+function element(tag, className, value) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (value !== undefined) node.textContent = value;
+  return node;
+}
+
+function endpoints(edge) {
+  return edge.direction === 'target-to-source' ?
+    [edge.target.object_id, edge.source.object_id] :
+    [edge.source.object_id, edge.target.object_id];
+}
+
+function rail(title, items, incoming) {
+  const section = element('section', `focus-rail ${incoming ? 'incoming' : 'outgoing'}`);
+  section.append(element('h3', '', `${title} (${items.length})`));
+  if (!items.length) {
+    section.append(element('p', 'rail-empty', 'No matching relationships.'));
+    return section;
+  }
+  const groups = new Map();
+  for (const item of items) {
+    if (!groups.has(item.edge.predicate)) groups.set(item.edge.predicate, []);
+    groups.get(item.edge.predicate).push(item);
+  }
+  for (const predicate of [...groups.keys()].sort()) {
+    const group = element('div', 'focus-relation-group');
+    group.append(element('h4', '', predicate.replaceAll('-', ' ')));
+    const list = element('ul', 'focus-neighbors');
+    for (const { edge, other } of groups.get(predicate).sort((a, b) =>
+      graph.terms[a.other].headword.localeCompare(graph.terms[b.other].headword, 'en'))) {
+      const name = graph.terms[other].headword;
+      const item = element('li', 'focus-neighbor');
+      const button = element('button', 'neighbor-focus', name);
+      button.type = 'button';
+      button.setAttribute('aria-label', `Focus map on ${name}`);
+      button.addEventListener('click', () => { termSelect.value = other; update(); });
+      const link = element('a', 'neighbor-definition', 'Definition');
+      link.href = `#${other}`;
+      link.setAttribute('aria-label', `Read definition of ${name}`);
+      const arrow = element('span', 'neighbor-direction', '→');
+      arrow.setAttribute('aria-hidden', 'true');
+      if (incoming) item.append(button, arrow);
+      else item.append(arrow, button);
+      if (edge.modality === 'possible') item.append(element('span', 'modality-label', 'possible'));
+      item.append(link);
+      list.append(item);
+    }
+    group.append(list);
+    section.append(group);
+  }
+  return section;
+}
+
+function draw(focus, edges) {
   stage.replaceChildren();
-  if (!nodes.length) return;
-  const columns = Math.min(4, Math.max(2, Math.ceil(Math.sqrt(nodes.length))));
-  const rows = Math.ceil(nodes.length / columns);
-  const width = columns * 218 + 40;
-  const height = rows * 116 + 36;
-  const svg = svgElement('svg', { viewBox: `0 0 ${width} ${height}`, width, height,
-    role: 'group', 'aria-label': `${nodes.length} ${nodes.length === 1 ? 'term' : 'terms'} and ${edges.length} ${edges.length === 1 ? 'relationship' : 'relationships'}` });
-  const defs = svgElement('defs');
-  const marker = svgElement('marker', { id: 'relation-arrow', viewBox: '0 0 10 10', refX: 8,
-    refY: 5, markerWidth: 7, markerHeight: 7, orient: 'auto-start-reverse' });
-  marker.append(svgElement('path', { d: 'M 0 0 L 10 5 L 0 10 z', fill: '#146653' }));
-  defs.append(marker);
-  svg.append(defs);
-  const positions = new Map(nodes.map((id, index) => [id, {
-    x: 22 + (index % columns) * 218, y: 20 + Math.floor(index / columns) * 116
-  }]));
+  if (!focus || !graph.terms[focus]) {
+    stage.append(element('p', 'map-empty', 'No connected terms are available.'));
+    return;
+  }
+  const name = graph.terms[focus].headword;
+  const incoming = [], outgoing = [];
   for (const edge of edges) {
-    const a = positions.get(edge.source.object_id);
-    const b = positions.get(edge.target.object_id);
-    if (!a || !b) continue;
-    const line = svgElement('line', { x1: a.x + 84, y1: a.y + 29, x2: b.x + 84, y2: b.y + 29,
-      class: `graph-edge ${edge.predicate}` });
-    if (edge.predicate === 'is-a' || edge.direction === 'source-to-target') line.setAttribute('marker-end', 'url(#relation-arrow)');
-    const title = svgElement('title');
-    title.textContent = `${graph.terms[edge.source.object_id].headword} ${edge.label} ${graph.terms[edge.target.object_id].headword}`;
-    line.append(title);
-    svg.append(line);
+    const [from, to] = endpoints(edge);
+    if (to === focus) incoming.push({ edge, other: from });
+    if (from === focus) outgoing.push({ edge, other: to });
   }
-  for (const id of nodes) {
-    const position = positions.get(id);
-    const entry = graph.terms[id];
-    if (!entry) continue;
-    const link = svgElement('a', { href: `#${id}`, class: 'graph-node', tabindex: 0,
-      'aria-label': `${entry.headword}, ${entry.scope}` });
-    link.append(svgElement('rect', { x: position.x, y: position.y, width: 168, height: 58, rx: 4 }));
-    const label = svgElement('text', { x: position.x + 10, y: position.y + 25 });
-    label.textContent = entry.headword.length > 24 ? entry.headword.slice(0, 23) + '…' : entry.headword;
-    const title = svgElement('title');
-    title.textContent = `${entry.headword} — ${entry.scope}`;
-    link.append(label, title);
-    svg.append(link);
-  }
-  stage.append(svg);
+  const layout = element('div', 'focus-layout');
+  const center = element('div', 'focus-center');
+  const node = element('div', 'focus-node');
+  node.append(element('span', 'focus-label', 'Focused term'));
+  node.append(element('strong', '', name));
+  const definition = element('a', '', 'Read definition');
+  definition.href = `#${focus}`;
+  node.append(definition);
+  center.append(node);
+  layout.append(rail('Points to this term', incoming, true), center,
+    rail('From this term', outgoing, false));
+  stage.append(layout);
+  stage.setAttribute('aria-label', `${name}: ${incoming.length} incoming and ${outgoing.length} outgoing relationships`);
 }
 
-function populateTerms(desired = '') {
-  const current = desired || termSelect.value;
-  const members = [...new Set(graph.relations.flatMap(edge => [edge.source.object_id, edge.target.object_id]))];
-  members.sort((a, b) => graph.terms[a].headword.localeCompare(graph.terms[b].headword, 'en'));
-  termSelect.replaceChildren(new Option('All connected terms', ''));
-  for (const id of members) termSelect.add(new Option(graph.terms[id].headword, id));
-  termSelect.value = members.includes(current) ? current : '';
-  termSelect.disabled = members.length === 0;
-}
+termSelect.replaceChildren();
+for (const id of connectedTerms) termSelect.add(new Option(graph.terms[id].headword, id));
+termSelect.value = connectedTerms.includes(params.get('term')) ? params.get('term') : defaultFocus;
+termSelect.disabled = connectedTerms.length === 0;
 
-function update({ resetPage = true } = {}) {
+function update() {
   connectedOnly.disabled = graph.relations.length === 0;
-  if (resetPage) graphPage = 0;
   const predicate = predicateSelect.value;
   const domain = domainSelect.value;
   const focus = termSelect.value;
@@ -100,33 +126,22 @@ function update({ resetPage = true } = {}) {
   const visibleEdges = graph.relations.filter(edge =>
     (!predicate || edge.predicate === predicate) &&
     (!domain || edge.domain === domain) &&
-    (!focus || edge.source.object_id === focus || edge.target.object_id === focus) &&
-    (!relationQuery || normalize(`${graph.terms[edge.source.object_id].headword} ${edge.predicate} ${graph.terms[edge.target.object_id].headword}`).includes(relationQuery)));
-  const incident = new Set(visibleEdges.flatMap(edge => [edge.source.object_id, edge.target.object_id]));
-  const pages = Math.max(1, Math.ceil(visibleEdges.length / pageSize));
-  graphPage = Math.min(graphPage, pages - 1);
-  const pageEdges = visibleEdges.slice(graphPage * pageSize, (graphPage + 1) * pageSize);
-  const selectedNodes = [...new Set(pageEdges.flatMap(edge => [edge.source.object_id, edge.target.object_id]))]
-    .sort((a, b) => graph.terms[a].headword.localeCompare(graph.terms[b].headword, 'en') || a.localeCompare(b));
-  draw(selectedNodes, pageEdges);
-  graphPrev.disabled = graphPage === 0;
-  graphNext.disabled = graphPage + 1 >= pages;
-  graphPageStatus.textContent = visibleEdges.length ? `Map section ${graphPage + 1} of ${pages}` : 'No map sections';
-  for (const row of relationRows) {
-    const edge = byRelation.get(row.dataset.relation);
-    row.hidden = !edge || !visibleEdges.includes(edge);
-  }
-  const visibleRows = visibleEdges.length;
-  relationCount.textContent = String(visibleRows);
-  relationEmpty.hidden = visibleRows !== 0;
-  relationStatus.textContent = `${visibleRows} working ${visibleRows === 1 ? 'relationship' : 'relationships'}`;
-  caption.textContent = visibleRows ?
-    `Map section ${graphPage + 1} shows ${pageEdges.length} of ${visibleRows} matching relationships. Use the list to access every match.` :
-    'No relationships match these filters.';
+    (!relationQuery || normalize(`${graph.terms[edge.source.object_id].headword} ${edge.label} ${graph.terms[edge.target.object_id].headword}`).includes(relationQuery)));
+  const focusEdges = visibleEdges.filter(edge => edge.source.object_id === focus || edge.target.object_id === focus);
+  draw(focus, focusEdges);
+  const visibleIds = new Set(visibleEdges.map(edge => edge.relation_id));
+  for (const row of relationRows) row.hidden = !visibleIds.has(row.dataset.relation);
+  relationCount.textContent = String(visibleEdges.length);
+  relationEmpty.hidden = visibleEdges.length !== 0;
+  relationStatus.textContent = `${visibleEdges.length} working ${visibleEdges.length === 1 ? 'relationship' : 'relationships'}`;
+  caption.textContent = focus ?
+    `${focusEdges.length} direct ${focusEdges.length === 1 ? 'relationship' : 'relationships'} for ${graph.terms[focus].headword}. The list below contains all ${visibleEdges.length} relationships matching the domain, type, and search filters.` :
+    'No connected terms are available.';
+  if (relationQuery) relationDetails.open = true;
+  const incident = new Set(focusEdges.flatMap(edge => [edge.source.object_id, edge.target.object_id]));
   let shown = 0;
   for (const [card, content] of indexed) {
-    const matches = (!connectedOnly.checked || incident.has(card.id)) &&
-      (!query || content.includes(query));
+    const matches = (!connectedOnly.checked || incident.has(card.id)) && (!query || content.includes(query));
     card.hidden = !matches;
     if (matches) shown += 1;
   }
@@ -148,11 +163,10 @@ function update({ resetPage = true } = {}) {
   for (const key of ['cluster', 'relation', 'term', 'connected', 'q', 'status', 'domain', 'rq', 'map']) next.searchParams.delete(key);
   if (predicate) next.searchParams.set('relation', predicate);
   if (domain) next.searchParams.set('domain', domain);
-  if (focus) next.searchParams.set('term', focus);
+  if (focus && focus !== defaultFocus) next.searchParams.set('term', focus);
   if (connectedOnly.checked) next.searchParams.set('connected', '1');
   if (input.value) next.searchParams.set('q', input.value);
   if (relationSearch.value) next.searchParams.set('rq', relationSearch.value);
-  if (graphPage) next.searchParams.set('map', String(graphPage + 1));
   history.replaceState(null, '', next);
 }
 
@@ -161,11 +175,8 @@ domainSelect.value = graph.relations.some(edge => edge.domain === params.get('do
 connectedOnly.checked = params.get('connected') === '1';
 input.value = params.get('q') ?? '';
 relationSearch.value = params.get('rq') ?? '';
-populateTerms(params.get('term') ?? '');
 for (const control of [domainSelect, predicateSelect, termSelect, connectedOnly, input, relationSearch])
-  control.addEventListener('input', () => update());
-graphPrev.addEventListener('click', () => { graphPage -= 1; update({ resetPage: false }); });
-graphNext.addEventListener('click', () => { graphPage += 1; update({ resetPage: false }); });
+  control.addEventListener('input', update);
 document.querySelector('#expand-letters').addEventListener('click', () => {
   for (const group of letterGroups) if (!group.hidden) group.open = true;
 });
@@ -183,12 +194,9 @@ function revealHash() {
     update();
   }
   const group = target.classList.contains('letter-group') ? target : target.closest('.letter-group');
-  if (group) {
-    group.hidden = false;
-    group.open = true;
-  }
+  if (group) { group.hidden = false; group.open = true; }
   requestAnimationFrame(() => target.scrollIntoView({ block: 'start' }));
 }
 window.addEventListener('hashchange', revealHash);
-update({ resetPage: false });
+update();
 if (location.hash) revealHash();
