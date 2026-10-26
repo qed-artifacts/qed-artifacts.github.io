@@ -66,6 +66,16 @@ its referenced public JSON objects. Propose the generated change through a
 reviewed site pull request. Do not import unpublished objects or copy text
 from the private collection into this repository.
 
+When the tagged public content includes `relations/graph.v1.json`, the same
+compiler adds a cluster map, relation-type and term filters, and an accessible
+relation list above glossary search. All node labels, links, relation counts,
+and cluster membership come from that validated snapshot and the same catalog.
+Aliases remain a distinct navigation route. The graph may show isolated cluster
+members; it never infers missing edges. `node scripts/test-glossary-relations-page.mjs`
+builds a local eight-term synthetic fixture under `out/glossary-relations-fixture/`
+for UI checks; it is not public dictionary content. The `--output SITE_FILE`
+builder option permits a local preview without changing the canonical page.
+
 The glossary compiler, search script, and page styling are offered under
 Apache-2.0 in `LICENSE-CODE`. Released glossary prose follows each public
 object's CC0-1.0 declaration.
