@@ -27,6 +27,7 @@
       background.append(svgElement('circle', { cx: size / 2, cy: size / 2, r: radius, class: 'constellation-ring' }));
     const lines = svgElement('g', { class: 'constellation-lines' });
     const dots = svgElement('g', { class: 'constellation-dots' });
+    const labels = svgElement('g', { class: 'constellation-labels' });
     const lineById = new Map();
     for (const edge of graph.relations) {
       const [from, to] = endpoints(edge);
@@ -49,7 +50,7 @@
       dots.append(dot);
       dotById.set(point.id, dot);
     }
-    svg.append(background, lines, dots);
+    svg.append(background, lines, dots, labels);
     const detail = element('div', 'constellation-detail');
     shell.append(svg, detail);
     stage.replaceChildren(shell);
@@ -126,6 +127,59 @@
       detail.append(list);
     }
 
+    function renderLabels(focus, directEdges) {
+      labels.replaceChildren();
+      if (!focus) return;
+      const neighbors = [...new Set(directEdges.flatMap(edge =>
+        [edge.source.object_id, edge.target.object_id]).filter(id => id !== focus))]
+        .sort((a, b) => graph.terms[b].headword.length - graph.terms[a].headword.length ||
+          graph.terms[a].headword.localeCompare(graph.terms[b].headword, 'en'));
+      const occupied = [];
+      for (const id of [focus, ...neighbors]) {
+        const point = byId.get(id);
+        const selected = id === focus;
+        const label = svgElement('text', { class: `constellation-label ${selected ? 'selected' : 'neighbor'}` });
+        label.textContent = graph.terms[id].headword;
+        if (!selected) label.addEventListener('click', () => selectTerm(id));
+        labels.append(label);
+        const measure = label.getBBox();
+        const width = measure.width;
+        const height = measure.height;
+        const inwardX = point.x > size / 2 ? -1 : 1;
+        const inwardY = point.y > size / 2 ? -1 : 1;
+        const side = direction => direction > 0 ? point.x + 16 : point.x - 16 - width;
+        const above = point.y - 13;
+        const below = point.y + height + 13;
+        const middle = point.y - measure.y - height / 2;
+        const candidates = [];
+        for (const direction of [inwardX, -inwardX]) {
+          for (const offset of [0, -1, 1, -2, 2, -3, 3])
+            candidates.push([side(direction), middle + offset * (height + 12)]);
+        }
+        candidates.push([point.x - width / 2, inwardY > 0 ? below : above],
+          [point.x - width / 2, inwardY > 0 ? above : below]);
+        let best;
+        candidates.forEach(([x, y], index) => {
+          const box = { left: x + measure.x - 5, top: y + measure.y - 4,
+            right: x + measure.x + width + 5, bottom: y + measure.y + height + 4 };
+          const squareOverflow = Math.max(0, 12 - box.left) + Math.max(0, box.right - size + 12) +
+            Math.max(0, 12 - box.top) + Math.max(0, box.bottom - size + 12);
+          const corners = [[box.left, box.top], [box.right, box.top],
+            [box.left, box.bottom], [box.right, box.bottom]];
+          const discOverflow = corners.reduce((sum, [cx, cy]) =>
+            sum + Math.max(0, Math.hypot(cx - size / 2, cy - size / 2) - 580), 0);
+          const overlap = occupied.reduce((sum, prior) => sum +
+            Math.max(0, Math.min(box.right, prior.right) - Math.max(box.left, prior.left)) *
+            Math.max(0, Math.min(box.bottom, prior.bottom) - Math.max(box.top, prior.top)), 0);
+          const score = squareOverflow * 1000 + discOverflow * 200 + overlap * 10 + index;
+          if (!best || score < best.score) best = { x, y, box, score };
+        });
+        label.setAttribute('x', best.x);
+        label.setAttribute('y', best.y);
+        occupied.push(best.box);
+      }
+    }
+
     function update(focus, visibleEdges) {
       focusId = focus;
       activeEdges = visibleEdges;
@@ -153,6 +207,7 @@
         line.classList.toggle('selected', Boolean(active));
       }
       if (focus) dots.append(dotById.get(focus));
+      renderLabels(focus, direct);
       renderDetail(focus, direct);
       stage.setAttribute('aria-label', focus ?
         `Constellation of ${graph.constellation.summary.total} terms focused on ${graph.terms[focus].headword}; ${direct.length} direct working relationships` :
