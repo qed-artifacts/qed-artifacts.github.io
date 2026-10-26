@@ -16,7 +16,7 @@ const write = async (file, value) => {
 const git = (...args) => execFileSync('git', args, { cwd: fixture, stdio: 'pipe' });
 try {
   await fs.mkdir(path.join(fixture, 'scripts'), { recursive: true });
-  for (const file of ['validate.mjs', 'navigation.mjs', 'relations.mjs']) {
+  for (const file of ['validate.mjs', 'navigation.mjs', 'relations.mjs', 'working-relations.mjs']) {
     await fs.copyFile(path.join(contentRoot, 'scripts', file), path.join(fixture, 'scripts', file));
   }
   const entries = [];
@@ -55,6 +55,23 @@ try {
           independent_external_review: false }
       }] };
   await write(path.join(fixture, 'relations', 'graph.v1.json'), graph);
+  await write(path.join(fixture, 'relations', 'studio-working.v1.json'), {
+    schema: 'qed-glossary-studio-working-relations-v1',
+    catalog_sha256: graph.catalog_sha256,
+    standing: 'owner-approved-working-unvalidated',
+    source_graph_sha256: 'f'.repeat(64), adopted_total: 4,
+    holds: { endpoint_reconciliation: 1, unresolved_predicate: 1, already_reviewed: 0, duplicate_working: 0 },
+    edges: [2, 3].map((number, index) => ({
+      edge_id: `edge.dictionary-v3.fixture.${'ab'[index].repeat(24)}`,
+      source: endpoint(entries[number - 1]), target: endpoint(entries[number]),
+      source_node_id: `term.dictionary-v3.fixture${number}`,
+      target_node_id: `term.dictionary-v3.fixture${number + 1}`,
+      predicate: index ? 'supports' : 'component-of', direction: 'source-to-target',
+      modality: 'asserted', domain: 'operational-causal',
+      standing: 'owner-approved-working-unvalidated',
+      scope: 'Studio working relation; exact glossary sense and claim have not been validated.'
+    }))
+  });
   git('init', '-q');
   git('config', 'user.name', 'Local fixture');
   git('config', 'user.email', 'fixture@example.invalid');
@@ -71,12 +88,16 @@ try {
   const html = await fs.readFile(previewFile, 'utf8');
   if (!html.includes('Synthetic interface fixture (8)') ||
       !html.includes('relation.glossary.fixture-one-is-a-two') ||
-      !html.includes('8 released objects') || !html.includes('Fixture term 8')) {
+      !html.includes('8 released objects') || !html.includes('Fixture term 8') ||
+      !html.includes('1 reviewed · 2 Studio-approved working') ||
+      !html.includes('2 adopted assertions remain in the private resolution queue') ||
+      !html.includes('id="status-filter"') || !html.includes('id="domain-filter"')) {
     throw Error('Fixture build lost cluster, relation, count, or isolated member');
   }
   await fs.writeFile(previewFile, html.replace('<body>',
     '<body>\n<div role="note" style="padding:12px 20px;background:#fff3c7;color:#332600;text-align:center;font-weight:700">LOCAL SYNTHETIC FIXTURE — interface test, not published dictionary content</div>'));
-  console.log(JSON.stringify({ status: 'fixture-built', preview, members: 8, relations: 1 }));
+  console.log(JSON.stringify({ status: 'fixture-built', preview, members: 8,
+    reviewed_relations: 1, working_relations: 2 }));
 } finally {
   await fs.rm(fixture, { recursive: true, force: true });
 }
