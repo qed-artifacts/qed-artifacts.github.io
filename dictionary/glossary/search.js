@@ -1,5 +1,6 @@
 const input = document.querySelector('#term-search');
 const cards = [...document.querySelectorAll('.entry')];
+const letterGroups = [...document.querySelectorAll('.letter-group')];
 const routes = [...document.querySelectorAll('.term-route')];
 const status = document.querySelector('#search-status');
 const empty = document.querySelector('#no-results');
@@ -130,13 +131,19 @@ function update({ preserveTerm = true } = {}) {
     card.hidden = !matches;
     if (matches) shown += 1;
   }
+  for (const group of letterGroups) {
+    const count = [...group.querySelectorAll('.entry')].filter(card => !card.hidden).length;
+    group.hidden = count === 0;
+    group.querySelector('.letter-count').textContent = `${count} ${count === 1 ? 'term' : 'terms'}`;
+    if (count && (query || cluster)) group.open = true;
+  }
   let routed = 0;
   for (const route of routes) {
     const matches = !!query && normalize(route.dataset.headword).includes(query);
     route.hidden = !matches;
     if (matches) routed += 1;
   }
-  status.textContent = `${shown} ${shown === 1 ? 'entry' : 'entries'} shown${routed ? ` · ${routed} related term ${routed === 1 ? 'route' : 'routes'}` : ''}`;
+  status.textContent = `${shown} ${shown === 1 ? 'entry' : 'entries'} available${routed ? ` · ${routed} related term ${routed === 1 ? 'route' : 'routes'}` : ''}`;
   empty.hidden = shown !== 0 || routed !== 0;
   const next = new URL(location.href);
   for (const key of ['cluster', 'relation', 'term', 'connected', 'q']) next.searchParams.delete(key);
@@ -155,4 +162,30 @@ input.value = params.get('q') ?? '';
 populateTerms(byCluster.get(clusterSelect.value), params.get('term') ?? '');
 clusterSelect.addEventListener('change', () => update({ preserveTerm: false }));
 for (const control of [predicateSelect, termSelect, connectedOnly, input]) control.addEventListener('input', () => update());
+document.querySelector('#expand-letters').addEventListener('click', () => {
+  for (const group of letterGroups) if (!group.hidden) group.open = true;
+});
+document.querySelector('#collapse-letters').addEventListener('click', () => {
+  for (const group of letterGroups) group.open = false;
+});
+function revealHash() {
+  let id;
+  try { id = decodeURIComponent(location.hash.slice(1)); } catch { return; }
+  const target = document.getElementById(id);
+  if (!target) return;
+  if (target.hidden || target.closest('.letter-group')?.hidden) {
+    clusterSelect.value = '';
+    connectedOnly.checked = false;
+    input.value = '';
+    update({ preserveTerm: false });
+  }
+  const group = target.classList.contains('letter-group') ? target : target.closest('.letter-group');
+  if (group) {
+    group.hidden = false;
+    group.open = true;
+  }
+  requestAnimationFrame(() => target.scrollIntoView({ block: 'start' }));
+}
+window.addEventListener('hashchange', revealHash);
 update();
+if (location.hash) revealHash();

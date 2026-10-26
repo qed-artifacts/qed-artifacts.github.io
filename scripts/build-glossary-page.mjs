@@ -73,12 +73,35 @@ const relationRows = graph.relations.map(edge => {
 const entries = objects.map(item => {
   const target = `https://github.com/qed-artifacts/dictionary-of-quality-content/blob/${encodeURIComponent(tag)}/${item.path}`;
   return `<article class="entry" id="${esc(item.object_id)}">
-  <div class="entry-top"><p class="scope">${esc(item.scope_label)}</p><h2>${esc(item.headword)}</h2></div>
+  <div class="entry-top"><h3>${esc(item.headword)}</h3><p class="scope">${esc(item.scope_label)}</p></div>
   <p class="definition">${esc(item.definition)}</p>
-  <details><summary>Read explanation</summary>${item.explanation.map(part => `<p>${esc(part)}</p>`).join('')}</details>
-  <div class="entry-meta"><span>CC0 1.0</span><a href="${esc(target)}">View versioned object</a></div>
+  <details><summary>More about this term</summary>${item.explanation.map(part => `<p>${esc(part)}</p>`).join('')}
+    <div class="entry-meta"><span>CC0 1.0</span><a href="${esc(target)}">View versioned object</a></div></details>
 </article>`;
+});
+const initial = headword => {
+  const first = headword.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').charAt(0).toUpperCase();
+  return /^[A-Z]$/.test(first) ? first : '0–9';
+};
+const groups = new Map();
+for (const [index, object] of objects.entries()) {
+  const key = initial(object.headword);
+  if (!groups.has(key)) groups.set(key, []);
+  groups.get(key).push(entries[index]);
+}
+const letters = [...groups.keys()].sort((a, b) => a === '0–9' ? -1 : b === '0–9' ? 1 : a.localeCompare(b));
+const entryGroups = letters.map(letter => {
+  const group = groups.get(letter);
+  const anchor = letter === '0–9' ? 'letter-number' : `letter-${letter.toLowerCase()}`;
+  return `<details class="letter-group" id="${anchor}" data-letter="${esc(letter)}"${letter === 'A' ? ' open' : ''}>
+  <summary><span class="letter-title">${esc(letter)}</span><span class="letter-count">${group.length} ${group.length === 1 ? 'term' : 'terms'}</span></summary>
+  <div class="letter-entries">${group.join('\n')}</div>
+</details>`;
 }).join('\n');
+const alphabetLinks = letters.map(letter => {
+  const anchor = letter === '0–9' ? 'letter-number' : `letter-${letter.toLowerCase()}`;
+  return `<a href="#${anchor}" aria-label="Browse ${letter === '0–9' ? 'numbered terms' : `terms beginning with ${letter}`}">${esc(letter)}</a>`;
+}).join('');
 const routeCards = navigation.routes.map(route => {
   const links = route.targets.map(target => `<a href="#${esc(target.object_id)}">${esc(target.headword)} <span>· ${esc(target.scope_label)}</span></a>`).join('');
   return `<article class="term-route" data-headword="${esc(route.headword)}" hidden>
@@ -126,9 +149,10 @@ const html = `<!doctype html>
       <details class="relation-details" open><summary>Relationship list <span id="relation-count">0</span></summary><ul id="relation-list">${relationRows}</ul><p id="relation-empty">No reviewed relationships in this selection.</p></details>
       <script type="application/json" id="graph-data">${graphData}</script>
     </section>
-    <div class="browser"><label for="term-search">Find a term or topic</label><input id="term-search" type="search" placeholder="Search released entries" autocomplete="off" aria-describedby="search-status"><p id="search-status" role="status" aria-live="polite">${objects.length} ${objects.length === 1 ? 'entry' : 'entries'} shown</p></div>
+    <div class="browser"><label for="term-search">Find a term or topic</label><input id="term-search" type="search" placeholder="Search released entries" autocomplete="off" aria-describedby="search-status"><p id="search-status" role="status" aria-live="polite">${objects.length} ${objects.length === 1 ? 'entry' : 'entries'} available</p></div>
+    <div class="browse-tools"><nav class="alphabet-index" aria-label="Browse by first letter">${alphabetLinks}</nav><div class="browse-buttons"><button id="expand-letters" type="button">Expand all</button><button id="collapse-letters" type="button">Collapse all</button></div></div>
     <div class="term-routes" id="term-routes" aria-label="Related term navigation">${routeCards}</div>
-    <div class="entry-list" id="entries">${entries}</div>
+    <div class="entry-list" id="entries">${entryGroups}</div>
     <p class="empty" id="no-results" hidden>No released entries match this search.</p>
   </main>
   <footer><p>QED Artifacts Institute · Dictionary of Quality</p><div><a href="${esc(sourceTree)}">Public object collection</a><a href="/">Home</a></div></footer>

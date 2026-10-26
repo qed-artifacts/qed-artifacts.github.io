@@ -76,6 +76,8 @@ builds a local eight-term synthetic fixture under `out/glossary-relations-fixtur
 for UI checks; it is not public dictionary content. The `--output SITE_FILE`
 builder option permits a local preview without changing the canonical page.
 
+Released terms appear in collapsible A–Z sections. Search and cluster filters reveal matching sections; each compact term shows its definition, with explanation and version link on demand. At wider widths the term grid uses two or three columns. Alphabet links and object deep links open the relevant section. Run `node scripts/test-glossary-search.mjs` to check filtering, controls, and generated grouping.
+
 The glossary compiler, search script, and page styling are offered under
 Apache-2.0 in `LICENSE-CODE`. Released glossary prose follows each public
 object's CC0-1.0 declaration.
