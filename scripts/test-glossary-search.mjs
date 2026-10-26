@@ -18,6 +18,8 @@ function interfaceFixture(graph = { relations: [], terms: {} }) {
     addEventListener(name, fn) { this[name] = fn; },
     replaceChildren() {}, add() {} });
   const input = control();
+  const layers = [control('meaning'), control('navigation')];
+  layers[0].checked = true;
   const cards = [{ id: 'glossary.ltfd.scope', textContent: 'LTPD lot tolerance percent defective', hidden: false },
     { id: 'glossary.fitness.scope', textContent: 'Fitness for use', hidden: false }];
   const groups = cards.map(card => {
@@ -32,6 +34,7 @@ function interfaceFixture(graph = { relations: [], terms: {} }) {
     '#no-results': { hidden: true },
     '#predicate-filter': control(), '#domain-filter': control(),
     '#term-filter': control(), '#relation-search': control(), '#connected-only': control(),
+    '#coverage-only': control(), '#coverage-panel': { hidden: true },
     '#relation-status': { textContent: '' }, '#relation-count': { textContent: '' },
     '#relation-empty': { hidden: true }, '#relation-details': { open: false },
     '#graph-stage': node('div'), '#graph-caption': { textContent: '' },
@@ -42,11 +45,13 @@ function interfaceFixture(graph = { relations: [], terms: {} }) {
     querySelectorAll: selector => selector === '.entry' ? cards : selector === '.term-route' ? routes :
       selector === '.letter-group' ? groups : selector === '.relation-row' ? relationRows : [],
     createElement: node };
+  const originalQueryAll = document.querySelectorAll;
+  document.querySelectorAll = selector => selector === 'input[name="map-layer"]' ? layers : originalQueryAll(selector);
   const location = { href: 'https://example.test/dictionary/glossary/', search: '', hash: '' };
   const mapUpdates = [];
   vm.runInNewContext(script, { document, location, history: { replaceState() {} },
-    window: { addEventListener() {}, GlossaryMap: { createMap() { return { update(focus, edges) {
-      mapUpdates.push({ focus, edges });
+    window: { addEventListener() {}, GlossaryMap: { createMap() { return { update(focus, edges, layer) {
+      mapUpdates.push({ focus, edges, layer });
     } }; } } }, requestAnimationFrame: fn => fn(),
     URL, URLSearchParams, Option: function (label, value) { return { label, value }; } });
   return { input, cards, routes, status: nodes['#search-status'], empty: nodes['#no-results'],
@@ -55,7 +60,8 @@ function interfaceFixture(graph = { relations: [], terms: {} }) {
     term: nodes['#term-filter'], predicate: nodes['#predicate-filter'],
     relationSearch: nodes['#relation-search'], relationCount: nodes['#relation-count'],
     relationDetails: nodes['#relation-details'], stage: nodes['#graph-stage'],
-    caption: nodes['#graph-caption'], relationRows, mapUpdates };
+    caption: nodes['#graph-caption'], relationRows, mapUpdates, layers,
+    coverageOnly: nodes['#coverage-only'], coveragePanel: nodes['#coverage-panel'] };
 }
 
 test('scoped term routes appear as navigation without becoming entry counts', () => {
@@ -138,4 +144,35 @@ test('generated page groups every released entry under one alphabet section', ()
   assert.equal([...html.matchAll(/<details class="letter-group"[^>]* open>/g)].length, 0,
     'all alphabet groups begin collapsed');
   assert.match(html, /<div class="letter-entries">/);
+});
+
+test('navigation view has its own route data and coverage facet without altering meaning edges', () => {
+  const endpoint = object_id => ({ object_id });
+  const graph = { terms: { a: { headword: 'Alpha' }, b: { headword: 'Beta' },
+    c: { headword: 'Gamma' } }, relations: [
+    { relation_id: 'semantic', source: endpoint('a'), target: endpoint('b'),
+      predicate: 'supports', label: 'supports', direction: 'source-to-target', domain: 'one' }
+  ], navigation: { quality_anchor: 'a', coverage_ids: ['c'], definition_routes: [
+    { relation_id: 'reference', source: endpoint('a'), target: endpoint('c'),
+      predicate: 'definition-mentions', label: 'references in Studio draft',
+      direction: 'source-to-target', domain: 'editorial navigation' }
+  ] } };
+  const view = interfaceFixture(graph);
+  view.layers[0].checked = false;
+  view.layers[1].checked = true;
+  view.layers[1].input();
+  assert.equal(view.term.value, 'a');
+  assert.equal(view.mapUpdates.at(-1).layer, 'navigation');
+  assert.equal(view.mapUpdates.at(-1).edges.length, 1);
+  assert.equal(view.coveragePanel.hidden, false);
+  assert.match(view.caption.textContent, /Studio draft reference/);
+  view.coverageOnly.checked = true;
+  view.coverageOnly.input();
+  assert.equal(view.cards.every(card => card.hidden), true);
+  view.layers[1].checked = false;
+  view.layers[0].checked = true;
+  view.layers[0].input();
+  assert.equal(view.mapUpdates.at(-1).layer, 'meaning');
+  assert.equal(view.mapUpdates.at(-1).edges.length, 1);
+  assert.equal(view.coveragePanel.hidden, true);
 });

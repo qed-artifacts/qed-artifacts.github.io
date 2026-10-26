@@ -26,7 +26,9 @@ function components(adjacency) {
 }
 
 function positionMainComponent(members, links, adjacency) {
-  const hub = [...members].sort((a, b) => adjacency.get(b).size - adjacency.get(a).size || a.localeCompare(b))[0];
+  const quality = 'glossary.quality.quality-management';
+  const hub = members.includes(quality) ? quality :
+    [...members].sort((a, b) => adjacency.get(b).size - adjacency.get(a).size || a.localeCompare(b))[0];
   const ordered = [hub, ...members.filter(id => id !== hub).sort()];
   const indexById = new Map(ordered.map((id, index) => [id, index]));
   const points = ordered.map((id, index) => {

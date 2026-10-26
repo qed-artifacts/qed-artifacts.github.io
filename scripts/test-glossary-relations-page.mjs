@@ -16,7 +16,7 @@ const write = async (file, value) => {
 const git = (...args) => execFileSync('git', args, { cwd: fixture, stdio: 'pipe' });
 try {
   await fs.mkdir(path.join(fixture, 'scripts'), { recursive: true });
-  for (const file of ['validate.mjs', 'navigation.mjs', 'relations.mjs', 'working-relations.mjs']) {
+  for (const file of ['validate.mjs', 'navigation.mjs', 'relations.mjs', 'working-relations.mjs', 'studio-navigation.mjs']) {
     await fs.copyFile(path.join(contentRoot, 'scripts', file), path.join(fixture, 'scripts', file));
   }
   const entries = [];
@@ -93,7 +93,7 @@ try {
       html.includes('id="cluster-filter"') || html.includes('id="status-filter"') ||
       !html.includes('id="domain-filter"') ||
       !html.includes('id="relation-details"') ||
-      !html.includes('3 terms have a displayed working relationship; 5 appear in the outer band') ||
+      !html.includes('2 owner-approved working relations touching 3 terms') ||
       !html.includes('src="constellation.js"') ||
       !html.includes('Map focus') || html.includes('id="graph-prev"')) {
     throw Error('Fixture build exposed archived reviewed displays or lost working relations and entries');
