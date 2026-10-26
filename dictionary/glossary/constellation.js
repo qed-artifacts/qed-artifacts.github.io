@@ -17,6 +17,11 @@
 
   function createMap(stage, graph, selectTerm) {
     const { size, nodes } = graph.constellation;
+    const navigation = graph.navigation ?? { definition_routes: [], coverage_ids: [], quality_anchor: '' };
+    const quality = navigation.quality_anchor;
+    const coverage = new Set(navigation.coverage_ids);
+    const referenceIds = new Set(navigation.definition_routes.flatMap(edge =>
+      [edge.source.object_id, edge.target.object_id]));
     const byId = new Map(nodes.map(node => [node.id, node]));
     const shell = element('div', 'constellation-shell');
     const svg = svgElement('svg', { viewBox: `0 0 ${size} ${size}`, 'aria-hidden': 'true',
@@ -26,6 +31,7 @@
     for (const radius of [130, 250, 365, 446, 585])
       background.append(svgElement('circle', { cx: size / 2, cy: size / 2, r: radius, class: 'constellation-ring' }));
     const lines = svgElement('g', { class: 'constellation-lines' });
+    const referenceLines = svgElement('g', { class: 'constellation-reference-lines' });
     const dots = svgElement('g', { class: 'constellation-dots' });
     const labels = svgElement('g', { class: 'constellation-labels' });
     const lineById = new Map();
@@ -42,15 +48,17 @@
     for (const point of nodes) {
       const term = graph.terms[point.id];
       const dot = svgElement('circle', { cx: point.x, cy: point.y,
-        r: point.connected ? 4 : 3.2,
-        class: `constellation-dot ${point.connected ? 'connected' : 'unlinked'}` });
+        r: point.id === quality ? 10 : point.connected ? 4 : 3.2,
+        class: `constellation-dot ${point.connected ? 'connected' : 'unlinked'}${point.id === quality ? ' quality-anchor' : ''}` });
       dot.append(svgElement('title'));
-      dot.firstChild.textContent = `${term.headword} · ${term.scope}${point.connected ? '' : ' · no displayed working relationship'}`;
+      dot.firstChild.textContent = `${term.headword} · ${term.scope}${point.id === quality ? ' · collection anchor' :
+        point.connected ? '' : referenceIds.has(point.id) ? ' · Studio reference route only' :
+          ' · no displayed working relationship or reference route'}`;
       dot.addEventListener('click', () => selectTerm(point.id));
       dots.append(dot);
       dotById.set(point.id, dot);
     }
-    svg.append(background, lines, dots, labels);
+    svg.append(background, lines, referenceLines, dots, labels);
     const detail = element('div', 'constellation-detail');
     shell.append(svg, detail);
     stage.replaceChildren(shell);
@@ -93,11 +101,11 @@
       return distances;
     }
 
-    function renderDetail(focus, directEdges) {
+    function renderDetail(focus, directEdges, layer) {
       detail.replaceChildren();
       if (!focus) {
         detail.append(element('strong', '', 'The whole collection'),
-          element('p', '', 'Select a dot or use Map focus to reveal a term’s connections. The outer band contains terms with no displayed working relation.'));
+          element('p', '', 'Quality anchors the collection map. Select a dot or use Map focus to reveal a term’s connections. The outer band contains terms with no displayed working relation.'));
         return;
       }
       const term = graph.terms[focus];
@@ -107,13 +115,20 @@
       link.href = `#${focus}`;
       heading.append(link);
       detail.append(heading);
+      if (layer === 'navigation' && focus === quality) {
+        detail.append(element('p', '', `${coverage.size} collection coverage candidates are marked in gold. Coverage is an editorial facet, not a semantic link to Quality.`));
+      }
       if (!directEdges.length) {
-        detail.append(element('p', '', 'No displayed relationship for this term in the current filters. This does not mean that no conceptual connection exists.'));
+        detail.append(element('p', '', layer === 'navigation' ?
+          'No Studio draft reference route for this term in the current filters.' :
+          'No displayed relationship for this term in the current filters. This does not mean that no conceptual connection exists.'));
         return;
       }
-      detail.append(element('p', '', `${directEdges.length} direct working ${directEdges.length === 1 ? 'relationship' : 'relationships'} in the current filters.`));
+      detail.append(element('p', '', layer === 'navigation' ?
+        `${directEdges.length} direct Studio draft ${directEdges.length === 1 ? 'reference route' : 'reference routes'} in the current filters. A route does not assert a conceptual relationship.` :
+        `${directEdges.length} direct working ${directEdges.length === 1 ? 'relationship' : 'relationships'} in the current filters.`));
       const list = element('ul', 'constellation-neighbors');
-      for (const edge of directEdges) {
+      for (const edge of directEdges.slice(0, 40)) {
         const [from, to] = endpoints(edge);
         const other = from === focus ? to : from;
         const item = element('li');
@@ -125,20 +140,24 @@
         list.append(item);
       }
       detail.append(list);
+      if (directEdges.length > 40) detail.append(element('p', '',
+        `Showing 40 neighboring terms here; all ${directEdges.length} routes remain in the searchable list below.`));
     }
 
     function renderLabels(focus, directEdges) {
       labels.replaceChildren();
-      if (!focus) return;
+      if (!focus && !quality) return;
       const neighbors = [...new Set(directEdges.flatMap(edge =>
         [edge.source.object_id, edge.target.object_id]).filter(id => id !== focus))]
         .sort((a, b) => graph.terms[b].headword.length - graph.terms[a].headword.length ||
           graph.terms[a].headword.localeCompare(graph.terms[b].headword, 'en'));
       const occupied = [];
-      for (const id of [focus, ...neighbors]) {
+      const labelIds = [...new Set([focus || quality, quality, ...neighbors.slice(0, 12)].filter(Boolean))];
+      for (const id of labelIds) {
         const point = byId.get(id);
+        if (!point) continue;
         const selected = id === focus;
-        const label = svgElement('text', { class: `constellation-label ${selected ? 'selected' : 'neighbor'}` });
+        const label = svgElement('text', { class: `constellation-label ${selected ? 'selected' : id === quality ? 'anchor' : 'neighbor'}` });
         label.textContent = graph.terms[id].headword;
         if (!selected) label.addEventListener('click', () => selectTerm(id));
         labels.append(label);
@@ -180,44 +199,56 @@
       }
     }
 
-    function update(focus, visibleEdges) {
+    function update(focus, visibleEdges, layer = 'meaning') {
       focusId = focus;
       activeEdges = visibleEdges;
+      const inNavigation = layer === 'navigation';
       const visibleIds = new Set(visibleEdges.map(edge => edge.relation_id));
       const distance = focus ? distancesFrom(focus, visibleEdges) : new Map();
       const direct = visibleEdges.filter(edge => edge.source.object_id === focus || edge.target.object_id === focus);
       for (const point of nodes) {
         const dot = dotById.get(point.id);
         const hops = distance.get(point.id);
-        const radius = point.id === focus ? 11 : hops === 1 ? 7 : hops === 2 ? 5 : point.connected ? 4 : 3.2;
-        const opacity = !focus ? point.connected ? .88 : .55
+        const radius = point.id === focus ? 11 : point.id === quality ? 10 : hops === 1 ? 7 : hops === 2 ? 5 : point.connected ? 4 : 3.2;
+        const opacity = point.id === quality ? 1 : !focus ? point.connected ? .88 : .55
           : hops === 0 ? 1 : hops === 1 ? .96 : hops === 2 ? .7 : hops === 3 ? .5 : .34;
         dot.setAttribute('r', radius);
         dot.setAttribute('opacity', opacity);
         dot.classList.toggle('selected', point.id === focus);
         dot.classList.toggle('near', hops === 1);
+        dot.classList.toggle('navigation-only', inNavigation && !point.connected && referenceIds.has(point.id));
+        dot.classList.toggle('coverage-candidate', inNavigation && coverage.has(point.id));
       }
       for (const edge of graph.relations) {
         const line = lineById.get(edge.relation_id);
         if (!line) continue;
         const [a, b] = endpoints(edge);
         const active = focus && (a === focus || b === focus);
-        line.setAttribute('opacity', !visibleIds.has(edge.relation_id) ? 0 :
+        line.setAttribute('opacity', inNavigation || !visibleIds.has(edge.relation_id) ? 0 :
           !focus ? .14 : active ? .9 : distance.has(a) && distance.has(b) ? .055 : .025);
         line.classList.toggle('selected', Boolean(active));
       }
+      referenceLines.replaceChildren();
+      if (inNavigation && focus) {
+        for (const edge of direct.slice(0, 60)) {
+          const [from, to] = endpoints(edge);
+          const a = byId.get(from), b = byId.get(to);
+          if (a && b) referenceLines.append(svgElement('line', { x1: a.x, y1: a.y,
+            x2: b.x, y2: b.y, class: 'constellation-reference-line' }));
+        }
+      }
       if (focus) dots.append(dotById.get(focus));
       renderLabels(focus, direct);
-      renderDetail(focus, direct);
+      renderDetail(focus, direct, layer);
       stage.setAttribute('aria-label', focus ?
-        `Constellation of ${graph.constellation.summary.total} terms focused on ${graph.terms[focus].headword}; ${direct.length} direct working relationships` :
+        `Constellation of ${graph.constellation.summary.total} terms focused on ${graph.terms[focus].headword}; ${direct.length} direct ${inNavigation ? 'Studio reference routes' : 'working relationships'}` :
         `Constellation of all ${graph.constellation.summary.total} released terms`);
       setViewBox();
     }
     zoomOut.addEventListener('click', () => { zoom = Math.max(1, Math.round(zoom / 1.45 * 100) / 100); setViewBox(); });
     zoomIn.addEventListener('click', () => { zoom = Math.min(3.2, Math.round(zoom * 1.45 * 100) / 100); setViewBox(); });
     showAll.addEventListener('click', () => { zoom = 1; setViewBox(); selectTerm(''); });
-    update('', activeEdges);
+    update('', activeEdges, 'meaning');
     return { update };
   }
 

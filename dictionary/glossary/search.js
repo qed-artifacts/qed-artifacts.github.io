@@ -9,6 +9,9 @@ const predicateSelect = document.querySelector('#predicate-filter');
 const termSelect = document.querySelector('#term-filter');
 const relationSearch = document.querySelector('#relation-search');
 const connectedOnly = document.querySelector('#connected-only');
+const coverageOnly = document.querySelector('#coverage-only');
+const coveragePanel = document.querySelector('#coverage-panel');
+const layerInputs = [...document.querySelectorAll('input[name="map-layer"]')];
 const relationStatus = document.querySelector('#relation-status');
 const relationCount = document.querySelector('#relation-count');
 const relationEmpty = document.querySelector('#relation-empty');
@@ -17,6 +20,8 @@ const relationRows = [...document.querySelectorAll('.relation-row')];
 const stage = document.querySelector('#graph-stage');
 const caption = document.querySelector('#graph-caption');
 const graph = JSON.parse(document.querySelector('#graph-data').textContent);
+const navigation = graph.navigation ?? { definition_routes: [], coverage_ids: [], quality_anchor: '' };
+const coverageIds = new Set(navigation.coverage_ids);
 const normalize = value => value.normalize('NFKD').toLocaleLowerCase().replace(/\p{Diacritic}/gu, '').trim();
 const indexed = cards.map(card => [card, normalize(card.textContent)]);
 const params = new URLSearchParams(location.search);
@@ -31,36 +36,50 @@ const map = window.GlossaryMap.createMap(stage, graph, id => { termSelect.value 
 let previousMapKey = '';
 
 function update() {
-  connectedOnly.disabled = graph.relations.length === 0 || !termSelect.value;
+  const layer = layerInputs.find(control => control.checked)?.value ?? 'meaning';
+  const inNavigation = layer === 'navigation';
+  coveragePanel.hidden = !inNavigation;
+  domainSelect.disabled = inNavigation;
+  predicateSelect.disabled = inNavigation;
+  if (inNavigation && !termSelect.value && graph.terms[navigation.quality_anchor]) {
+    termSelect.value = navigation.quality_anchor;
+  }
+  const layerEdges = inNavigation ? navigation.definition_routes : graph.relations;
+  connectedOnly.disabled = layerEdges.length === 0 || !termSelect.value;
   if (connectedOnly.disabled) connectedOnly.checked = false;
   const predicate = predicateSelect.value;
   const domain = domainSelect.value;
   const focus = termSelect.value;
   const query = normalize(input.value);
   const relationQuery = normalize(relationSearch.value);
-  const visibleEdges = graph.relations.filter(edge =>
-    (!predicate || edge.predicate === predicate) &&
-    (!domain || edge.domain === domain) &&
+  const visibleEdges = layerEdges.filter(edge =>
+    (inNavigation || !predicate || edge.predicate === predicate) &&
+    (inNavigation || !domain || edge.domain === domain) &&
     (!relationQuery || normalize(`${graph.terms[edge.source.object_id].headword} ${edge.label} ${graph.terms[edge.target.object_id].headword}`).includes(relationQuery)));
   const focusEdges = visibleEdges.filter(edge => edge.source.object_id === focus || edge.target.object_id === focus);
-  const mapKey = `${focus}\u0000${domain}\u0000${predicate}\u0000${relationQuery}`;
+  const mapKey = `${layer}\u0000${focus}\u0000${domain}\u0000${predicate}\u0000${relationQuery}`;
   if (mapKey !== previousMapKey) {
-    map.update(focus, visibleEdges);
+    map.update(focus, visibleEdges, layer);
     previousMapKey = mapKey;
   }
   const visibleIds = new Set(visibleEdges.map(edge => edge.relation_id));
-  for (const row of relationRows) row.hidden = !visibleIds.has(row.dataset.relation);
+  for (const row of relationRows) row.hidden = (row.dataset.layer ?? 'meaning') !== layer ||
+    !visibleIds.has(row.dataset.relation);
   relationCount.textContent = String(visibleEdges.length);
   relationEmpty.hidden = visibleEdges.length !== 0;
-  relationStatus.textContent = `${visibleEdges.length} working ${visibleEdges.length === 1 ? 'relationship' : 'relationships'}`;
+  relationStatus.textContent = inNavigation ?
+    `${visibleEdges.length} Studio reference ${visibleEdges.length === 1 ? 'route' : 'routes'} · ${coverageIds.size} coverage candidates` :
+    `${visibleEdges.length} working ${visibleEdges.length === 1 ? 'relationship' : 'relationships'}`;
   caption.textContent = focus ?
-    `${focusEdges.length} direct ${focusEdges.length === 1 ? 'relationship' : 'relationships'} for ${graph.terms[focus].headword}. All ${termIds.length} released terms remain on the map; the list below contains all ${visibleEdges.length} matching relationships.` :
-    `All ${termIds.length} released terms are on the map. Select a dot or use Map focus to reveal its connections; the list below contains ${visibleEdges.length} matching relationships.`;
+    `${focusEdges.length} direct ${inNavigation ? 'Studio draft reference' : 'working relationship'}${focusEdges.length === 1 ? '' : 's'} for ${graph.terms[focus].headword}. All ${termIds.length} released terms remain on the map; the list below contains all ${visibleEdges.length} matching ${inNavigation ? 'routes' : 'relationships'}.` :
+    `All ${termIds.length} released terms are on the map. Select a dot or use Map focus to reveal its connections; the list below contains ${visibleEdges.length} matching ${inNavigation ? 'routes' : 'relationships'}.`;
   if (relationQuery) relationDetails.open = true;
   const incident = new Set([focus, ...focusEdges.flatMap(edge => [edge.source.object_id, edge.target.object_id])]);
   let shown = 0;
   for (const [card, content] of indexed) {
-    const matches = (!connectedOnly.checked || incident.has(card.id)) && (!query || content.includes(query));
+    const matches = (!connectedOnly.checked || incident.has(card.id)) &&
+      (!inNavigation || !coverageOnly.checked || coverageIds.has(card.id)) &&
+      (!query || content.includes(query));
     card.hidden = !matches;
     if (matches) shown += 1;
   }
@@ -86,6 +105,7 @@ function update() {
   if (connectedOnly.checked) next.searchParams.set('connected', '1');
   if (input.value) next.searchParams.set('q', input.value);
   if (relationSearch.value) next.searchParams.set('rq', relationSearch.value);
+  if (inNavigation) next.searchParams.set('map', 'navigation');
   history.replaceState(null, '', next);
 }
 
@@ -94,7 +114,12 @@ domainSelect.value = graph.relations.some(edge => edge.domain === params.get('do
 connectedOnly.checked = params.get('connected') === '1';
 input.value = params.get('q') ?? '';
 relationSearch.value = params.get('rq') ?? '';
-for (const control of [domainSelect, predicateSelect, termSelect, connectedOnly, input, relationSearch])
+if (params.get('map') === 'navigation') {
+  const option = layerInputs.find(control => control.value === 'navigation');
+  if (option) option.checked = true;
+}
+for (const control of [domainSelect, predicateSelect, termSelect, connectedOnly, coverageOnly,
+  input, relationSearch, ...layerInputs])
   control.addEventListener('input', update);
 document.querySelector('#expand-letters').addEventListener('click', () => {
   for (const group of letterGroups) if (!group.hidden) group.open = true;

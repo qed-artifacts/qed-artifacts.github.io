@@ -21,6 +21,9 @@ test('every released term has one stable map position, including terms without d
   assert.equal(graph.relations.length, 505);
   assert.equal(layout.summary.connected, 261);
   assert.equal(layout.summary.unlinked, 617);
+  const quality = layout.nodes.find(node => node.id === 'glossary.quality.quality-management');
+  assert.deepEqual([quality.x, quality.y], [layout.size / 2, layout.size / 2],
+    'Quality remains the central editorial anchor');
   for (const node of layout.nodes) {
     assert.ok(node.x >= 0 && node.x <= layout.size && node.y >= 0 && node.y <= layout.size);
     assert.ok(Math.hypot(node.x - layout.size / 2, node.y - layout.size / 2) < 590);

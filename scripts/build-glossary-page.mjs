@@ -48,6 +48,12 @@ try {
 } catch (error) {
   if (error.code !== 'ENOENT') throw error;
 }
+let studioNav = { definition_routes: [], coverage: { targets: [] } };
+try {
+  studioNav = JSON.parse(await fs.readFile(path.join(sourceRoot, 'relations', 'studio-navigation.v1.json'), 'utf8'));
+} catch (error) {
+  if (error.code !== 'ENOENT') throw error;
+}
 const esc = value => String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 const objects = [];
 for (const pointer of catalog.entries) {
@@ -68,22 +74,37 @@ const relations = working.edges.map(edge => ({ relation_id: edge.edge_id, source
   predicate: edge.predicate, label: edge.predicate.replaceAll('-', ' '),
   domain: edge.domain, modality: edge.modality, direction: edge.direction,
   scope: edge.scope }));
+const referenceRoutes = studioNav.definition_routes.map(route => ({
+  relation_id: route.source_edge_ids[0], source: route.source, target: route.target,
+  predicate: route.predicate, label: 'references in Studio draft',
+  domain: 'editorial navigation', modality: route.modality, direction: route.direction,
+  standing: route.standing
+}));
+const coverageIds = studioNav.coverage.targets.map(item => item.target.object_id);
 const predicates = [...new Set(relations.map(edge => edge.predicate))].sort();
 const domains = [...new Set(relations.map(edge => edge.domain))].sort();
 const terms = Object.fromEntries(objects.map(item => [item.object_id, { headword: item.headword, scope: item.scope_label }]));
 const constellation = buildConstellationLayout(terms, relations);
-const graphData = JSON.stringify({ relations, terms, constellation })
+const graphData = JSON.stringify({ relations, terms, constellation,
+  navigation: { definition_routes: referenceRoutes, coverage_ids: coverageIds,
+    quality_anchor: studioNav.quality_anchor?.object_id ?? 'glossary.quality.quality-management' } })
   .replace(/</g, '\\u003c');
-const relationRows = relations.map(edge => {
+const relationRows = [...relations.map(edge => ({ ...edge, layer: 'meaning' })),
+  ...referenceRoutes.map(edge => ({ ...edge, layer: 'navigation' }))].map(edge => {
   const fromId = edge.direction === 'target-to-source' ? edge.target.object_id : edge.source.object_id;
   const toId = edge.direction === 'target-to-source' ? edge.source.object_id : edge.target.object_id;
   const from = byId.get(fromId);
   const to = byId.get(toId);
   if (!from || !to) throw Error(`Graph endpoint missing from current entries: ${edge.relation_id}`);
-  return `<li class="relation-row" data-relation="${esc(edge.relation_id)}" data-domain="${esc(edge.domain)}" hidden>
+  return `<li class="relation-row" data-relation="${esc(edge.relation_id)}" data-layer="${edge.layer}" data-domain="${esc(edge.domain)}" hidden>
   <a href="#${esc(fromId)}">${esc(from.headword)}</a> <span>${esc(edge.label)}</span> <a href="#${esc(toId)}">${esc(to.headword)}</a>
   </li>`;
 }).join('');
+const semanticIds = new Set(relations.flatMap(edge => [edge.source.object_id, edge.target.object_id]));
+const referenceIds = new Set(referenceRoutes.flatMap(edge => [edge.source.object_id, edge.target.object_id]));
+const coverageSet = new Set(coverageIds);
+const navigationOnly = [...referenceIds].filter(id => !semanticIds.has(id)).length;
+const noLinks = objects.filter(item => !semanticIds.has(item.object_id) && !referenceIds.has(item.object_id)).length;
 const entries = objects.map(item => {
   const target = `https://github.com/qed-artifacts/dictionary-of-quality-content/blob/${encodeURIComponent(tag)}/${item.path}`;
   return `<article class="entry" id="${esc(item.object_id)}">
@@ -152,7 +173,8 @@ const html = `<!doctype html>
     <section class="relation-explorer" id="relationships" aria-labelledby="relationships-title">
       <div class="explorer-heading"><div><p class="eyebrow">Explore the collection</p><h2 id="relationships-title">Term relationships</h2></div>
         <p id="relation-status" role="status" aria-live="polite">${working.edges.length} working relationships</p></div>
-      <p class="explorer-copy">Every released term appears in the constellation. ${constellation.summary.connected} terms have a displayed working relationship; ${constellation.summary.unlinked} appear in the outer band because no working relationship is displayed for them. Selecting a term shows its name and the names of its directly connected terms on the map; linked names appear at half opacity. These relations are owner-approved working assertions; their exact senses and claims have not been independently validated.</p>
+      <p class="explorer-copy">Every released term appears in the constellation, with Quality at its center. The meaning map shows ${relations.length} owner-approved working relations touching ${constellation.summary.connected} terms; their exact senses and claims have not been independently validated. The separate references view offers ${referenceRoutes.length} routes derived from Studio draft definitions. A route helps you explore another term; it does not assert a conceptual relationship or claim the released definition uses the same wording.</p>
+      <fieldset class="layer-picker"><legend>Explore</legend><label><input type="radio" name="map-layer" value="meaning" checked> Meaning map</label><label><input type="radio" name="map-layer" value="navigation"> References and coverage</label></fieldset>
       <div class="explorer-controls">
         <label for="domain-filter">Domain <select id="domain-filter"><option value="">All domains</option>${domains.map(value => `<option value="${esc(value)}">${esc(value.replaceAll('-', ' '))}</option>`).join('')}</select></label>
         <label for="predicate-filter">Relation type <select id="predicate-filter"><option value="">All types</option>${predicates.map(value => `<option value="${esc(value)}">${esc(value.replaceAll('-', ' '))}</option>`).join('')}</select></label>
@@ -160,7 +182,8 @@ const html = `<!doctype html>
         <label for="relation-search">Find relationship <input id="relation-search" type="search" placeholder="Search terms or relation type" autocomplete="off"></label>
         <label class="focus-toggle"><input type="checkbox" id="connected-only"> Show only terms connected to the map focus</label>
       </div>
-      <div class="map-toolbar"><div class="map-legend" aria-label="Map legend"><span><i class="map-key connected"></i>${constellation.summary.connected} terms with displayed links</span><span><i class="map-key unlinked"></i>${constellation.summary.unlinked} terms without displayed links</span></div>
+      <div class="coverage-panel" id="coverage-panel" hidden><p><strong>${coverageIds.length} coverage candidates</strong> in the Studio collection map. Quality is the editorial anchor for this facet; these are not ${coverageIds.length} semantic relationships to Quality. ${navigationOnly} terms have a reference route but no displayed working relation; ${noLinks} have neither kind of displayed link.</p><label><input type="checkbox" id="coverage-only"> Show only coverage candidates in the A–Z entries</label></div>
+      <div class="map-toolbar"><div class="map-legend" id="map-legend" aria-label="Map legend"><span><i class="map-key connected"></i>${constellation.summary.connected} terms with working relations</span><span><i class="map-key navigation"></i>${navigationOnly} additional terms with reference routes</span><span><i class="map-key unlinked"></i>${noLinks} terms without displayed links</span></div>
         <div class="map-zoom" aria-label="Map zoom"><button id="map-zoom-out" type="button" aria-label="Zoom out of constellation">−</button><button id="map-zoom-in" type="button" aria-label="Zoom into constellation">+</button><button id="map-reset" type="button">Show all</button></div></div>
       <div class="graph-stage" id="graph-stage" role="group" aria-label="Constellation of all released glossary terms"></div>
       <p class="graph-caption" id="graph-caption">Select a term to brighten its connections. All terms remain in the map, and the searchable list contains every displayed relationship.</p>
@@ -187,4 +210,6 @@ if (check) {
 }
 console.log(JSON.stringify({ mode: check ? 'checked' : 'built', entries: objects.length,
   navigation_routes: navigation.routes.length, graph_clusters: graph.clusters.length,
-  graph_relations: graph.relations.length, studio_working_relations: working.edges.length, tag, commit, output }));
+  graph_relations: graph.relations.length, studio_working_relations: working.edges.length,
+  studio_definition_routes: referenceRoutes.length, studio_coverage_candidates: coverageIds.length,
+  tag, commit, output }));
