@@ -41,7 +41,7 @@ try {
 } catch (error) {
   if (error.code !== 'ENOENT') throw error;
 }
-let working = { edges: [], holds: { endpoint_reconciliation: 0, unresolved_predicate: 0, duplicate_working: 0 }, adopted_total: 0 };
+let working = { edges: [], holds: { endpoint_reconciliation: 0, unresolved_predicate: 0, already_reviewed: 0, duplicate_working: 0 }, adopted_total: 0 };
 try {
   working = JSON.parse(await fs.readFile(path.join(sourceRoot, 'relations', 'studio-working.v1.json'), 'utf8'));
 } catch (error) {
@@ -154,7 +154,7 @@ const html = `<!doctype html>
     <section class="relation-explorer" id="relationships" aria-labelledby="relationships-title">
       <div class="explorer-heading"><div><p class="eyebrow">Explore the collection</p><h2 id="relationships-title">Term relationships</h2></div>
         <p id="relation-status" role="status" aria-live="polite">${graph.relations.length} reviewed · ${working.edges.length} Studio-approved working relationships</p></div>
-      <p class="explorer-copy">Reviewed relations and Studio-approved working relations are separate layers. Working relations reflect an adopted Studio assertion and a headword match; their exact glossary sense and claim have not been independently validated. ${working.holds.endpoint_reconciliation + working.holds.unresolved_predicate} adopted assertions remain in the private resolution queue (${working.holds.endpoint_reconciliation} endpoint, ${working.holds.unresolved_predicate} predicate). ${working.holds.duplicate_working} duplicate assertions were collapsed.</p>
+      <p class="explorer-copy">Reviewed relations and Studio-approved working relations are separate layers. Working relations reflect an adopted Studio assertion and a headword match; their exact glossary sense and claim have not been independently validated. ${working.holds.endpoint_reconciliation + working.holds.unresolved_predicate} adopted assertions remain in the private resolution queue (${working.holds.endpoint_reconciliation} endpoint, ${working.holds.unresolved_predicate} predicate). ${working.holds.already_reviewed} assertions defer to reviewed relations; ${working.holds.duplicate_working} duplicate working assertions were collapsed.</p>
       <div class="explorer-controls">
         <label for="cluster-filter">Cluster <select id="cluster-filter"><option value="">All released entries</option>${graphClusters}</select></label>
         <label for="status-filter">Status <select id="status-filter"><option value="">Both layers</option><option value="reviewed">Reviewed</option><option value="working">Studio-approved working</option></select></label>

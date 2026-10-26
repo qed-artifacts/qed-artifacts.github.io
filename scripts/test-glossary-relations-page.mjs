@@ -60,7 +60,7 @@ try {
     catalog_sha256: graph.catalog_sha256,
     standing: 'owner-approved-working-unvalidated',
     source_graph_sha256: 'f'.repeat(64), adopted_total: 4,
-    holds: { endpoint_reconciliation: 1, unresolved_predicate: 1, duplicate_working: 0 },
+    holds: { endpoint_reconciliation: 1, unresolved_predicate: 1, already_reviewed: 0, duplicate_working: 0 },
     edges: [2, 3].map((number, index) => ({
       edge_id: `edge.dictionary-v3.fixture.${'ab'[index].repeat(24)}`,
       source: endpoint(entries[number - 1]), target: endpoint(entries[number]),
