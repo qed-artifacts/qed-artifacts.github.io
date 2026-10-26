@@ -20,104 +20,19 @@ const graph = JSON.parse(document.querySelector('#graph-data').textContent);
 const normalize = value => value.normalize('NFKD').toLocaleLowerCase().replace(/\p{Diacritic}/gu, '').trim();
 const indexed = cards.map(card => [card, normalize(card.textContent)]);
 const params = new URLSearchParams(location.search);
-const degree = new Map();
-for (const edge of graph.relations) {
-  for (const id of [edge.source.object_id, edge.target.object_id]) degree.set(id, (degree.get(id) || 0) + 1);
-}
-const connectedTerms = [...degree.keys()].sort((a, b) =>
-  graph.terms[a].headword.localeCompare(graph.terms[b].headword, 'en') || a.localeCompare(b));
-const defaultFocus = [...connectedTerms].sort((a, b) =>
-  degree.get(b) - degree.get(a) || graph.terms[a].headword.localeCompare(graph.terms[b].headword, 'en'))[0] || '';
-
-function element(tag, className, value) {
-  const node = document.createElement(tag);
-  if (className) node.className = className;
-  if (value !== undefined) node.textContent = value;
-  return node;
-}
-
-function endpoints(edge) {
-  return edge.direction === 'target-to-source' ?
-    [edge.target.object_id, edge.source.object_id] :
-    [edge.source.object_id, edge.target.object_id];
-}
-
-function rail(title, items, incoming) {
-  const section = element('section', `focus-rail ${incoming ? 'incoming' : 'outgoing'}`);
-  section.append(element('h3', '', `${title} (${items.length})`));
-  if (!items.length) {
-    section.append(element('p', 'rail-empty', 'No matching relationships.'));
-    return section;
-  }
-  const groups = new Map();
-  for (const item of items) {
-    if (!groups.has(item.edge.predicate)) groups.set(item.edge.predicate, []);
-    groups.get(item.edge.predicate).push(item);
-  }
-  for (const predicate of [...groups.keys()].sort()) {
-    const group = element('div', 'focus-relation-group');
-    group.append(element('h4', '', predicate.replaceAll('-', ' ')));
-    const list = element('ul', 'focus-neighbors');
-    for (const { edge, other } of groups.get(predicate).sort((a, b) =>
-      graph.terms[a.other].headword.localeCompare(graph.terms[b.other].headword, 'en'))) {
-      const name = graph.terms[other].headword;
-      const item = element('li', 'focus-neighbor');
-      const button = element('button', 'neighbor-focus', name);
-      button.type = 'button';
-      button.setAttribute('aria-label', `Focus map on ${name}`);
-      button.addEventListener('click', () => { termSelect.value = other; update(); });
-      const link = element('a', 'neighbor-definition', 'Definition');
-      link.href = `#${other}`;
-      link.setAttribute('aria-label', `Read definition of ${name}`);
-      const arrow = element('span', 'neighbor-direction', '→');
-      arrow.setAttribute('aria-hidden', 'true');
-      if (incoming) item.append(button, arrow);
-      else item.append(arrow, button);
-      if (edge.modality === 'possible') item.append(element('span', 'modality-label', 'possible'));
-      item.append(link);
-      list.append(item);
-    }
-    group.append(list);
-    section.append(group);
-  }
-  return section;
-}
-
-function draw(focus, edges) {
-  stage.replaceChildren();
-  if (!focus || !graph.terms[focus]) {
-    stage.append(element('p', 'map-empty', 'No connected terms are available.'));
-    return;
-  }
-  const name = graph.terms[focus].headword;
-  const incoming = [], outgoing = [];
-  for (const edge of edges) {
-    const [from, to] = endpoints(edge);
-    if (to === focus) incoming.push({ edge, other: from });
-    if (from === focus) outgoing.push({ edge, other: to });
-  }
-  const layout = element('div', 'focus-layout');
-  const center = element('div', 'focus-center');
-  const node = element('div', 'focus-node');
-  node.append(element('span', 'focus-label', 'Focused term'));
-  node.append(element('strong', '', name));
-  const definition = element('a', '', 'Read definition');
-  definition.href = `#${focus}`;
-  node.append(definition);
-  center.append(node);
-  layout.append(rail('Points to this term', incoming, true), center,
-    rail('From this term', outgoing, false));
-  stage.append(layout);
-  stage.setAttribute('aria-label', `${name}: ${incoming.length} incoming and ${outgoing.length} outgoing relationships`);
-}
-
+const termIds = Object.keys(graph.terms).sort((a, b) =>
+  graph.terms[a].headword.localeCompare(graph.terms[b].headword, 'en') ||
+  (graph.terms[a].scope ?? '').localeCompare(graph.terms[b].scope ?? '', 'en') || a.localeCompare(b));
 termSelect.replaceChildren();
-for (const id of connectedTerms) termSelect.add(new Option(graph.terms[id].headword, id));
-termSelect.value = connectedTerms.includes(params.get('term')) ? params.get('term') : defaultFocus;
-termSelect.disabled = connectedTerms.length === 0;
+termSelect.add(new Option('Overview · all released terms', ''));
+for (const id of termIds) termSelect.add(new Option(`${graph.terms[id].headword}${graph.terms[id].scope ? ` · ${graph.terms[id].scope}` : ''}`, id));
+termSelect.value = graph.terms[params.get('term')] ? params.get('term') : '';
+const map = window.GlossaryMap.createMap(stage, graph, id => { termSelect.value = id; update(); });
+let previousMapKey = '';
 
 function update() {
-  connectedOnly.disabled = graph.relations.length === 0;
+  connectedOnly.disabled = graph.relations.length === 0 || !termSelect.value;
+  if (connectedOnly.disabled) connectedOnly.checked = false;
   const predicate = predicateSelect.value;
   const domain = domainSelect.value;
   const focus = termSelect.value;
@@ -128,17 +43,21 @@ function update() {
     (!domain || edge.domain === domain) &&
     (!relationQuery || normalize(`${graph.terms[edge.source.object_id].headword} ${edge.label} ${graph.terms[edge.target.object_id].headword}`).includes(relationQuery)));
   const focusEdges = visibleEdges.filter(edge => edge.source.object_id === focus || edge.target.object_id === focus);
-  draw(focus, focusEdges);
+  const mapKey = `${focus}\u0000${domain}\u0000${predicate}\u0000${relationQuery}`;
+  if (mapKey !== previousMapKey) {
+    map.update(focus, visibleEdges);
+    previousMapKey = mapKey;
+  }
   const visibleIds = new Set(visibleEdges.map(edge => edge.relation_id));
   for (const row of relationRows) row.hidden = !visibleIds.has(row.dataset.relation);
   relationCount.textContent = String(visibleEdges.length);
   relationEmpty.hidden = visibleEdges.length !== 0;
   relationStatus.textContent = `${visibleEdges.length} working ${visibleEdges.length === 1 ? 'relationship' : 'relationships'}`;
   caption.textContent = focus ?
-    `${focusEdges.length} direct ${focusEdges.length === 1 ? 'relationship' : 'relationships'} for ${graph.terms[focus].headword}. The list below contains all ${visibleEdges.length} relationships matching the domain, type, and search filters.` :
-    'No connected terms are available.';
+    `${focusEdges.length} direct ${focusEdges.length === 1 ? 'relationship' : 'relationships'} for ${graph.terms[focus].headword}. All ${termIds.length} released terms remain on the map; the list below contains all ${visibleEdges.length} matching relationships.` :
+    `All ${termIds.length} released terms are on the map. Select a dot or use Map focus to reveal its connections; the list below contains ${visibleEdges.length} matching relationships.`;
   if (relationQuery) relationDetails.open = true;
-  const incident = new Set(focusEdges.flatMap(edge => [edge.source.object_id, edge.target.object_id]));
+  const incident = new Set([focus, ...focusEdges.flatMap(edge => [edge.source.object_id, edge.target.object_id])]);
   let shown = 0;
   for (const [card, content] of indexed) {
     const matches = (!connectedOnly.checked || incident.has(card.id)) && (!query || content.includes(query));
@@ -163,7 +82,7 @@ function update() {
   for (const key of ['cluster', 'relation', 'term', 'connected', 'q', 'status', 'domain', 'rq', 'map']) next.searchParams.delete(key);
   if (predicate) next.searchParams.set('relation', predicate);
   if (domain) next.searchParams.set('domain', domain);
-  if (focus && focus !== defaultFocus) next.searchParams.set('term', focus);
+  if (focus) next.searchParams.set('term', focus);
   if (connectedOnly.checked) next.searchParams.set('connected', '1');
   if (input.value) next.searchParams.set('q', input.value);
   if (relationSearch.value) next.searchParams.set('rq', relationSearch.value);
