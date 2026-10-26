@@ -86,18 +86,18 @@ try {
   }
   const previewFile = path.join(preview, 'index.html');
   const html = await fs.readFile(previewFile, 'utf8');
-  if (!html.includes('Synthetic interface fixture (8)') ||
-      !html.includes('relation.glossary.fixture-one-is-a-two') ||
+  if (html.includes('Synthetic interface fixture (8)') ||
+      html.includes('relation.glossary.fixture-one-is-a-two') ||
       !html.includes('8 released objects') || !html.includes('Fixture term 8') ||
-      !html.includes('1 reviewed · 2 Studio-approved working') ||
-      !html.includes('2 adopted assertions remain in the private resolution queue') ||
-      !html.includes('id="status-filter"') || !html.includes('id="domain-filter"')) {
-    throw Error('Fixture build lost cluster, relation, count, or isolated member');
+      !html.includes('2 working relationships') ||
+      html.includes('id="cluster-filter"') || html.includes('id="status-filter"') ||
+      !html.includes('id="domain-filter"')) {
+    throw Error('Fixture build exposed archived reviewed displays or lost working relations and entries');
   }
   await fs.writeFile(previewFile, html.replace('<body>',
     '<body>\n<div role="note" style="padding:12px 20px;background:#fff3c7;color:#332600;text-align:center;font-weight:700">LOCAL SYNTHETIC FIXTURE — interface test, not published dictionary content</div>'));
   console.log(JSON.stringify({ status: 'fixture-built', preview, members: 8,
-    reviewed_relations: 1, working_relations: 2 }));
+    archived_reviewed_relations: 1, displayed_working_relations: 2 }));
 } finally {
   await fs.rm(fixture, { recursive: true, force: true });
 }

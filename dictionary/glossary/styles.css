@@ -20,8 +20,6 @@
 .graph-stage:empty{display:none}
 .graph-stage svg{display:block;max-width:none}
 .graph-edge{stroke:#146653;stroke-width:2.5}
-.graph-edge.working{stroke:#a46b22;stroke-dasharray:7 5}
-.graph-edge.reviewed.distinguished-from{stroke:#146653}
 .graph-node rect{fill:#fff;stroke:#146653;stroke-width:2}
 .graph-node:hover rect,.graph-node:focus-visible rect{fill:#e3f0e9}
 .graph-node text{font:700 12px var(--sans);fill:var(--ink);pointer-events:none}
@@ -33,13 +31,9 @@
 .relation-details summary{cursor:pointer;color:var(--green);font-weight:700}
 .relation-details ul{list-style:none;padding:0;display:grid;gap:10px}
 .relation-row{padding:12px;border:1px solid var(--line);font-size:.9rem}
-.relation-badge{display:inline-block;margin-right:10px;padding:3px 7px;font:.68rem var(--mono);border:1px solid #146653;color:#146653}
-.relation-badge.working{border-color:#a46b22;color:#80511a;background:#fff8ed}
 .relation-row[hidden]{display:none}
 .relation-row>a{font-weight:700;color:var(--green)}
 .relation-row>span{margin:0 6px;color:var(--ink-soft)}
-.relation-row p{margin:7px 0 0;color:var(--ink-soft)}
-.relation-row small{display:block;color:var(--muted);margin-top:4px}
 #relation-empty{color:var(--muted);font-size:.85rem}
 .browser{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px 20px;align-items:end;margin:38px 0 14px}
 .browser label{grid-column:1/-1;font-family:var(--mono);font-size:.74rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase}

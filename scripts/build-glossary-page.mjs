@@ -63,29 +63,22 @@ for (const pointer of catalog.entries) {
 objects.sort((a, b) => a.headword.localeCompare(b.headword, 'en', { sensitivity: 'base' }) ||
   a.scope_label.localeCompare(b.scope_label, 'en', { sensitivity: 'base' }) || a.object_id.localeCompare(b.object_id));
 const byId = new Map(objects.map(item => [item.object_id, item]));
-const relations = [
-  ...graph.relations.map(edge => ({ ...edge, status: 'reviewed', domain: 'reviewed-glossary' })),
-  ...working.edges.map(edge => ({ relation_id: edge.edge_id, source: edge.source, target: edge.target,
-    predicate: edge.predicate, label: edge.predicate.replaceAll('-', ' '), status: 'working',
-    domain: edge.domain, modality: edge.modality, direction: edge.direction,
-    scope: edge.scope }))
-];
+const relations = working.edges.map(edge => ({ relation_id: edge.edge_id, source: edge.source, target: edge.target,
+  predicate: edge.predicate, label: edge.predicate.replaceAll('-', ' '),
+  domain: edge.domain, modality: edge.modality, direction: edge.direction,
+  scope: edge.scope }));
 const predicates = [...new Set(relations.map(edge => edge.predicate))].sort();
 const domains = [...new Set(relations.map(edge => edge.domain))].sort();
-const graphData = JSON.stringify({ clusters: graph.clusters, relations,
-  holds: working.holds,
+const graphData = JSON.stringify({ relations,
   terms: Object.fromEntries(objects.map(item => [item.object_id, { headword: item.headword, scope: item.scope_label }])) })
   .replace(/</g, '\\u003c');
-const graphClusters = graph.clusters.map(cluster =>
-  `<option value="${esc(cluster.cluster_id)}">${esc(cluster.title)} (${cluster.members.length})</option>`).join('');
 const relationRows = relations.map(edge => {
   const from = byId.get(edge.source.object_id);
   const to = byId.get(edge.target.object_id);
   if (!from || !to) throw Error(`Graph endpoint missing from current entries: ${edge.relation_id}`);
-  return `<li class="relation-row" data-relation="${esc(edge.relation_id)}" data-status="${esc(edge.status)}" data-domain="${esc(edge.domain)}" hidden>
-  <span class="relation-badge ${esc(edge.status)}">${edge.status === 'reviewed' ? 'Reviewed relation' : 'Studio-approved working'}</span>
+  return `<li class="relation-row" data-relation="${esc(edge.relation_id)}" data-domain="${esc(edge.domain)}" hidden>
   <a href="#${esc(edge.source.object_id)}">${esc(from.headword)}</a> <span>${esc(edge.label)}</span> <a href="#${esc(edge.target.object_id)}">${esc(to.headword)}</a>
-  <p>${edge.explanation ? esc(edge.explanation) + ' ' : ''}<small>${esc(edge.scope)}</small></p></li>`;
+  </li>`;
 }).join('');
 const entries = objects.map(item => {
   const target = `https://github.com/qed-artifacts/dictionary-of-quality-content/blob/${encodeURIComponent(tag)}/${item.path}`;
@@ -153,11 +146,9 @@ const html = `<!doctype html>
     </div>
     <section class="relation-explorer" id="relationships" aria-labelledby="relationships-title">
       <div class="explorer-heading"><div><p class="eyebrow">Explore the collection</p><h2 id="relationships-title">Term relationships</h2></div>
-        <p id="relation-status" role="status" aria-live="polite">${graph.relations.length} reviewed · ${working.edges.length} Studio-approved working relationships</p></div>
-      <p class="explorer-copy">Reviewed relations and Studio-approved working relations are separate layers. Working relations reflect an adopted Studio assertion and a headword match; their exact glossary sense and claim have not been independently validated. ${working.holds.endpoint_reconciliation + working.holds.unresolved_predicate} adopted assertions remain in the private resolution queue (${working.holds.endpoint_reconciliation} endpoint, ${working.holds.unresolved_predicate} predicate). ${working.holds.already_reviewed} assertions defer to reviewed relations; ${working.holds.duplicate_working} duplicate working assertions were collapsed.</p>
+        <p id="relation-status" role="status" aria-live="polite">${working.edges.length} working relationships</p></div>
+      <p class="explorer-copy">Explore owner-approved working relationships between glossary terms. Their exact senses and claims have not been independently validated.</p>
       <div class="explorer-controls">
-        <label for="cluster-filter">Cluster <select id="cluster-filter"><option value="">All released entries</option>${graphClusters}</select></label>
-        <label for="status-filter">Status <select id="status-filter"><option value="">Both layers</option><option value="reviewed">Reviewed</option><option value="working">Studio-approved working</option></select></label>
         <label for="domain-filter">Domain <select id="domain-filter"><option value="">All domains</option>${domains.map(value => `<option value="${esc(value)}">${esc(value.replaceAll('-', ' '))}</option>`).join('')}</select></label>
         <label for="predicate-filter">Relation type <select id="predicate-filter"><option value="">All types</option>${predicates.map(value => `<option value="${esc(value)}">${esc(value.replaceAll('-', ' '))}</option>`).join('')}</select></label>
         <label for="term-filter">Focus term <select id="term-filter"><option value="">All connected terms</option></select></label>
