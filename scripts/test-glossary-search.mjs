@@ -43,8 +43,11 @@ function interfaceFixture(graph = { relations: [], terms: {} }) {
       selector === '.letter-group' ? groups : selector === '.relation-row' ? relationRows : [],
     createElement: node };
   const location = { href: 'https://example.test/dictionary/glossary/', search: '', hash: '' };
+  const mapUpdates = [];
   vm.runInNewContext(script, { document, location, history: { replaceState() {} },
-    window: { addEventListener() {} }, requestAnimationFrame: fn => fn(),
+    window: { addEventListener() {}, GlossaryMap: { createMap() { return { update(focus, edges) {
+      mapUpdates.push({ focus, edges });
+    } }; } } }, requestAnimationFrame: fn => fn(),
     URL, URLSearchParams, Option: function (label, value) { return { label, value }; } });
   return { input, cards, routes, status: nodes['#search-status'], empty: nodes['#no-results'],
     connected: nodes['#connected-only'], groups,
@@ -52,7 +55,7 @@ function interfaceFixture(graph = { relations: [], terms: {} }) {
     term: nodes['#term-filter'], predicate: nodes['#predicate-filter'],
     relationSearch: nodes['#relation-search'], relationCount: nodes['#relation-count'],
     relationDetails: nodes['#relation-details'], stage: nodes['#graph-stage'],
-    caption: nodes['#graph-caption'], relationRows };
+    caption: nodes['#graph-caption'], relationRows, mapUpdates };
 }
 
 test('scoped term routes appear as navigation without becoming entry counts', () => {
@@ -85,7 +88,7 @@ test('letter controls expand and collapse the visible groups', () => {
   assert.equal(view.groups.every(group => !group.open), true);
 });
 
-test('focused map follows edge direction while the list retains every matching relation', () => {
+test('constellation starts with all terms, then focuses without hiding unrelated entries', () => {
   const endpoint = id => ({ object_id: id });
   const graph = { terms: { a: { headword: 'Alpha' }, b: { headword: 'Beta' },
     c: { headword: 'Gamma' } }, relations: [
@@ -97,21 +100,30 @@ test('focused map follows edge direction while the list retains every matching r
       domain: 'one', modality: 'possible' }
   ] };
   const view = interfaceFixture(graph);
-  assert.equal(view.term.value, 'b');
-  assert.match(view.stage.attributes['aria-label'], /Beta: 1 incoming and 1 outgoing/);
+  assert.equal(view.term.value, '');
+  assert.equal(view.mapUpdates.at(-1).focus, '');
+  assert.equal(view.connected.disabled, true);
   assert.equal(view.relationCount.textContent, '2');
-  view.term.value = 'c';
+  view.term.value = 'b';
   view.term.input();
-  assert.match(view.stage.attributes['aria-label'], /Gamma: 1 incoming and 0 outgoing/);
+  assert.equal(view.mapUpdates.at(-1).focus, 'b');
+  assert.equal(view.mapUpdates.at(-1).edges.length, 2);
+  assert.equal(view.connected.disabled, false);
+  assert.match(view.caption.textContent, /All 3 released terms remain on the map/);
   assert.equal(view.relationCount.textContent, '2');
   view.predicate.value = 'supports';
   view.predicate.input();
-  assert.match(view.stage.attributes['aria-label'], /Gamma: 0 incoming and 0 outgoing/);
+  assert.equal(view.mapUpdates.at(-1).edges.length, 1);
   assert.equal(view.relationCount.textContent, '1');
   assert.deepEqual(view.relationRows.map(row => row.hidden), [false, true]);
   view.relationSearch.value = 'alpha';
   view.relationSearch.input();
   assert.equal(view.relationDetails.open, true);
+  view.term.value = 'c';
+  view.term.input();
+  view.connected.checked = true;
+  view.connected.input();
+  assert.equal(view.cards.every(card => card.hidden), true);
 });
 
 test('generated page groups every released entry under one alphabet section', () => {

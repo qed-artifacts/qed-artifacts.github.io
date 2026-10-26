@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { buildConstellationLayout } from './glossary-constellation-layout.mjs';
 
 const siteRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
@@ -69,8 +70,9 @@ const relations = working.edges.map(edge => ({ relation_id: edge.edge_id, source
   scope: edge.scope }));
 const predicates = [...new Set(relations.map(edge => edge.predicate))].sort();
 const domains = [...new Set(relations.map(edge => edge.domain))].sort();
-const graphData = JSON.stringify({ relations,
-  terms: Object.fromEntries(objects.map(item => [item.object_id, { headword: item.headword, scope: item.scope_label }])) })
+const terms = Object.fromEntries(objects.map(item => [item.object_id, { headword: item.headword, scope: item.scope_label }]));
+const constellation = buildConstellationLayout(terms, relations);
+const graphData = JSON.stringify({ relations, terms, constellation })
   .replace(/</g, '\\u003c');
 const relationRows = relations.map(edge => {
   const fromId = edge.direction === 'target-to-source' ? edge.target.object_id : edge.source.object_id;
@@ -133,6 +135,7 @@ const html = `<!doctype html>
   <link rel="canonical" href="https://qedartifacts.org/dictionary/glossary/">
   <link rel="stylesheet" href="../../assets/styles.css">
   <link rel="stylesheet" href="styles.css">
+  <script src="constellation.js" defer></script>
   <script src="search.js" defer></script>
 </head>
 <body>
@@ -149,7 +152,7 @@ const html = `<!doctype html>
     <section class="relation-explorer" id="relationships" aria-labelledby="relationships-title">
       <div class="explorer-heading"><div><p class="eyebrow">Explore the collection</p><h2 id="relationships-title">Term relationships</h2></div>
         <p id="relation-status" role="status" aria-live="polite">${working.edges.length} working relationships</p></div>
-      <p class="explorer-copy">Explore owner-approved working relationships between glossary terms. Their exact senses and claims have not been independently validated.</p>
+      <p class="explorer-copy">Every released term appears in the constellation. ${constellation.summary.connected} terms have a displayed working relationship; ${constellation.summary.unlinked} appear in the outer band because no working relationship is displayed for them. Selecting a term brightens its nearby connections by link distance. These relations are owner-approved working assertions; their exact senses and claims have not been independently validated.</p>
       <div class="explorer-controls">
         <label for="domain-filter">Domain <select id="domain-filter"><option value="">All domains</option>${domains.map(value => `<option value="${esc(value)}">${esc(value.replaceAll('-', ' '))}</option>`).join('')}</select></label>
         <label for="predicate-filter">Relation type <select id="predicate-filter"><option value="">All types</option>${predicates.map(value => `<option value="${esc(value)}">${esc(value.replaceAll('-', ' '))}</option>`).join('')}</select></label>
@@ -157,8 +160,10 @@ const html = `<!doctype html>
         <label for="relation-search">Find relationship <input id="relation-search" type="search" placeholder="Search terms or relation type" autocomplete="off"></label>
         <label class="focus-toggle"><input type="checkbox" id="connected-only"> Show only terms connected to the map focus</label>
       </div>
-      <div class="graph-stage" id="graph-stage" role="group" aria-label="Relationships around a focused term"></div>
-      <p class="graph-caption" id="graph-caption">Choose a term to see its direct relationships. The searchable list includes every matching relationship.</p>
+      <div class="map-toolbar"><div class="map-legend" aria-label="Map legend"><span><i class="map-key connected"></i>${constellation.summary.connected} terms with displayed links</span><span><i class="map-key unlinked"></i>${constellation.summary.unlinked} terms without displayed links</span></div>
+        <div class="map-zoom" aria-label="Map zoom"><button id="map-zoom-out" type="button" aria-label="Zoom out of constellation">−</button><button id="map-zoom-in" type="button" aria-label="Zoom into constellation">+</button><button id="map-reset" type="button">Show all</button></div></div>
+      <div class="graph-stage" id="graph-stage" role="group" aria-label="Constellation of all released glossary terms"></div>
+      <p class="graph-caption" id="graph-caption">Select a term to brighten its connections. All terms remain in the map, and the searchable list contains every displayed relationship.</p>
       <details class="relation-details" id="relation-details"><summary>Browse all matching relationships <span id="relation-count">0</span></summary><ul id="relation-list">${relationRows}</ul><p id="relation-empty">No relationships in this selection.</p></details>
       <script type="application/json" id="graph-data">${graphData}</script>
     </section>

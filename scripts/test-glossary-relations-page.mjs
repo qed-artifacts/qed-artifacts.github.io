@@ -81,7 +81,7 @@ try {
   execFileSync(process.execPath, [path.join(siteRoot, 'scripts', 'build-glossary-page.mjs'),
     '--source', fixture, '--tag', 'glossary-test-relations', '--output', path.join(preview, 'index.html')],
     { cwd: siteRoot, stdio: 'inherit' });
-  for (const file of ['search.js', 'styles.css']) {
+  for (const file of ['search.js', 'constellation.js', 'styles.css']) {
     await fs.copyFile(path.join(siteRoot, 'dictionary', 'glossary', file), path.join(preview, file));
   }
   const previewFile = path.join(preview, 'index.html');
@@ -93,6 +93,8 @@ try {
       html.includes('id="cluster-filter"') || html.includes('id="status-filter"') ||
       !html.includes('id="domain-filter"') ||
       !html.includes('id="relation-details"') ||
+      !html.includes('3 terms have a displayed working relationship; 5 appear in the outer band') ||
+      !html.includes('src="constellation.js"') ||
       !html.includes('Map focus') || html.includes('id="graph-prev"')) {
     throw Error('Fixture build exposed archived reviewed displays or lost working relations and entries');
   }
