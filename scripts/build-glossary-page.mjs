@@ -107,7 +107,7 @@ const letters = [...groups.keys()].sort((a, b) => a === '0–9' ? -1 : b === '0�
 const entryGroups = letters.map(letter => {
   const group = groups.get(letter);
   const anchor = letter === '0–9' ? 'letter-number' : `letter-${letter.toLowerCase()}`;
-  return `<details class="letter-group" id="${anchor}" data-letter="${esc(letter)}"${letter === 'A' ? ' open' : ''}>
+  return `<details class="letter-group" id="${anchor}" data-letter="${esc(letter)}">
   <summary><span class="letter-title">${esc(letter)}</span><span class="letter-count">${group.length} ${group.length === 1 ? 'term' : 'terms'}</span></summary>
   <div class="letter-entries">${group.join('\n')}</div>
 </details>`;
