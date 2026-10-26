@@ -91,7 +91,9 @@ try {
       !html.includes('8 released objects') || !html.includes('Fixture term 8') ||
       !html.includes('2 working relationships') ||
       html.includes('id="cluster-filter"') || html.includes('id="status-filter"') ||
-      !html.includes('id="domain-filter"')) {
+      !html.includes('id="domain-filter"') ||
+      !html.includes('id="relation-details"') ||
+      !html.includes('Map focus') || html.includes('id="graph-prev"')) {
     throw Error('Fixture build exposed archived reviewed displays or lost working relations and entries');
   }
   await fs.writeFile(previewFile, html.replace('<body>',
