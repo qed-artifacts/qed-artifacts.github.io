@@ -28,6 +28,12 @@ if (!git('tag', '--points-at', 'HEAD').split(/\r?\n/).includes(tag)) {
 }
 execFileSync(process.execPath, ['scripts/validate.mjs'], { cwd: sourceRoot, stdio: 'pipe' });
 const catalog = JSON.parse(await fs.readFile(path.join(sourceRoot, 'catalog.json'), 'utf8'));
+let navigation = { schema: 'qed-glossary-public-navigation-v1', routes: [] };
+try {
+  navigation = JSON.parse(await fs.readFile(path.join(sourceRoot, 'navigation.json'), 'utf8'));
+} catch (error) {
+  if (error.code !== 'ENOENT') throw error;
+}
 const esc = value => String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 const objects = [];
 for (const pointer of catalog.entries) {
@@ -50,6 +56,14 @@ const entries = objects.map(item => {
   <p class="definition">${esc(item.definition)}</p>
   <details><summary>Read explanation</summary>${item.explanation.map(part => `<p>${esc(part)}</p>`).join('')}</details>
   <div class="entry-meta"><span>CC0 1.0</span><a href="${esc(target)}">View versioned object</a></div>
+</article>`;
+}).join('\n');
+const routeCards = navigation.routes.map(route => {
+  const links = route.targets.map(target => `<a href="#${esc(target.object_id)}">${esc(target.headword)} <span>· ${esc(target.scope_label)}</span></a>`).join('');
+  return `<article class="term-route" data-headword="${esc(route.headword)}" hidden>
+  <p class="scope">${esc(route.scope_label)}</p><h2>${esc(route.headword)}</h2>
+  <p>${route.action === 'alias' ? 'In this scope, see the released entry:' : 'In this scope, choose the relevant released entry:'}</p>
+  <div class="route-links">${links}</div>
 </article>`;
 }).join('\n');
 const sourceTree = `https://github.com/qed-artifacts/dictionary-of-quality-content/tree/${encodeURIComponent(tag)}`;
@@ -77,6 +91,7 @@ const html = `<!doctype html>
       <p class="snapshot">Collection version <a href="${esc(sourceTree)}">${esc(tag)}</a> · commit <code>${esc(commit.slice(0, 12))}</code>. Original reader prose is CC0 1.0.</p>
     </div>
     <div class="browser"><label for="term-search">Find a term or topic</label><input id="term-search" type="search" placeholder="Search released entries" autocomplete="off" aria-describedby="search-status"><p id="search-status" role="status" aria-live="polite">${objects.length} ${objects.length === 1 ? 'entry' : 'entries'} shown</p></div>
+    <div class="term-routes" id="term-routes" aria-label="Related term navigation">${routeCards}</div>
     <div class="entry-list" id="entries">${entries}</div>
     <p class="empty" id="no-results" hidden>No released entries match this search.</p>
   </main>
@@ -92,4 +107,5 @@ if (check) {
   await fs.mkdir(path.dirname(output), { recursive: true });
   await fs.writeFile(output, html);
 }
-console.log(JSON.stringify({ mode: check ? 'checked' : 'built', entries: objects.length, tag, commit, output }));
+console.log(JSON.stringify({ mode: check ? 'checked' : 'built', entries: objects.length,
+  navigation_routes: navigation.routes.length, tag, commit, output }));
