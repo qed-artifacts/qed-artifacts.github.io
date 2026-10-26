@@ -83,6 +83,15 @@ const referenceRoutes = studioNav.definition_routes.map(route => ({
 const coverageIds = studioNav.coverage.targets.map(item => item.target.object_id);
 const predicates = [...new Set(relations.map(edge => edge.predicate))].sort();
 const domains = [...new Set(relations.map(edge => edge.domain))].sort();
+const familyLabels = {
+  'conceptual-ontological': 'Concepts and kinds',
+  'evaluative-normative': 'Judgments and standards',
+  'operational-causal': 'Actions and processes',
+  'evidence-provenance': 'Evidence and support',
+  'lexical-semiotic': 'Terms and meanings'
+};
+const familyCount = domain => relations.filter(edge => edge.domain === domain).length;
+const modalityCount = modality => relations.filter(edge => edge.modality === modality).length;
 const terms = Object.fromEntries(objects.map(item => [item.object_id, { headword: item.headword, scope: item.scope_label }]));
 const constellation = buildConstellationLayout(terms, relations);
 const graphData = JSON.stringify({ relations, terms, constellation,
@@ -97,7 +106,7 @@ const relationRows = [...relations.map(edge => ({ ...edge, layer: 'meaning' })),
   const to = byId.get(toId);
   if (!from || !to) throw Error(`Graph endpoint missing from current entries: ${edge.relation_id}`);
   return `<li class="relation-row" data-relation="${esc(edge.relation_id)}" data-layer="${edge.layer}" data-domain="${esc(edge.domain)}" hidden>
-  <a href="#${esc(fromId)}">${esc(from.headword)}</a> <span>${esc(edge.label)}</span> <a href="#${esc(toId)}">${esc(to.headword)}</a>
+  <a href="#${esc(fromId)}">${esc(from.headword)}</a> <small>${esc(from.scope_label)}</small> <span aria-label="points to">→</span> <strong>${esc(edge.label)}</strong> <span aria-label="points to">→</span> <a href="#${esc(toId)}">${esc(to.headword)}</a> <small>${esc(to.scope_label)}</small>${edge.layer === 'meaning' && edge.modality === 'possible' ? ' <em class="possibility">possible in Studio</em>' : ''}
   </li>`;
 }).join('');
 const semanticIds = new Set(relations.flatMap(edge => [edge.source.object_id, edge.target.object_id]));
@@ -174,11 +183,14 @@ const html = `<!doctype html>
       <div class="explorer-heading"><div><p class="eyebrow">Explore the collection</p><h2 id="relationships-title">Term relationships</h2></div>
         <p id="relation-status" role="status" aria-live="polite">${working.edges.length} working relationships</p></div>
       <p class="explorer-copy">Every released term appears in the constellation, with Quality at its center. The meaning map shows ${relations.length} owner-approved working relations touching ${constellation.summary.connected} terms; their exact senses and claims have not been independently validated. The separate references view offers ${referenceRoutes.length} routes derived from Studio draft definitions. A route helps you explore another term; it does not assert a conceptual relationship or claim the released definition uses the same wording.</p>
+      <p class="map-reading-note">Quality is a visual anchor. Distance between dots and rings is page layout, not a measure of similarity, importance, or evidence strength.</p>
+      <details class="map-reading-guide"><summary>How to read a connection</summary><p>Read each arrow from the first scoped term through its relation type to the second. A dashed line or “possible” label records Studio’s tentative wording; a solid line is still a working relation, not an independently validated claim. Following two links does not establish a new link between their endpoints. The separate reference routes help navigation only.</p></details>
       <fieldset class="layer-picker"><legend>Explore</legend><label><input type="radio" name="map-layer" value="meaning" checked> Meaning map</label><label><input type="radio" name="map-layer" value="navigation"> References and coverage</label></fieldset>
       <div class="explorer-controls">
-        <label for="domain-filter">Domain <select id="domain-filter"><option value="">All domains</option>${domains.map(value => `<option value="${esc(value)}">${esc(value.replaceAll('-', ' '))}</option>`).join('')}</select></label>
+        <label for="domain-filter">Connection theme <select id="domain-filter"><option value="">All themes · ${relations.length}</option>${domains.map(value => `<option value="${esc(value)}">${esc(familyLabels[value] ?? value.replaceAll('-', ' '))} · ${familyCount(value)}</option>`).join('')}</select></label>
         <label for="predicate-filter">Relation type <select id="predicate-filter"><option value="">All types</option>${predicates.map(value => `<option value="${esc(value)}">${esc(value.replaceAll('-', ' '))}</option>`).join('')}</select></label>
-        <label for="term-filter">Map focus <select id="term-filter"></select></label>
+        <label for="modality-filter">How stated in Studio <select id="modality-filter"><option value="">All working forms · ${relations.length}</option><option value="asserted">Stated · ${modalityCount('asserted')}</option><option value="possible">Possible · ${modalityCount('possible')}</option></select></label>
+        <label class="map-focus-control" for="term-filter">Map focus <select id="term-filter"></select></label>
         <label for="relation-search">Find relationship <input id="relation-search" type="search" placeholder="Search terms or relation type" autocomplete="off"></label>
         <label class="focus-toggle"><input type="checkbox" id="connected-only"> Show only terms connected to the map focus</label>
       </div>

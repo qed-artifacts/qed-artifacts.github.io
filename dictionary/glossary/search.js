@@ -6,6 +6,7 @@ const status = document.querySelector('#search-status');
 const empty = document.querySelector('#no-results');
 const domainSelect = document.querySelector('#domain-filter');
 const predicateSelect = document.querySelector('#predicate-filter');
+const modalitySelect = document.querySelector('#modality-filter');
 const termSelect = document.querySelector('#term-filter');
 const relationSearch = document.querySelector('#relation-search');
 const connectedOnly = document.querySelector('#connected-only');
@@ -41,6 +42,7 @@ function update() {
   coveragePanel.hidden = !inNavigation;
   domainSelect.disabled = inNavigation;
   predicateSelect.disabled = inNavigation;
+  modalitySelect.disabled = inNavigation;
   if (inNavigation && !termSelect.value && graph.terms[navigation.quality_anchor]) {
     termSelect.value = navigation.quality_anchor;
   }
@@ -49,15 +51,17 @@ function update() {
   if (connectedOnly.disabled) connectedOnly.checked = false;
   const predicate = predicateSelect.value;
   const domain = domainSelect.value;
+  const modality = modalitySelect.value;
   const focus = termSelect.value;
   const query = normalize(input.value);
   const relationQuery = normalize(relationSearch.value);
   const visibleEdges = layerEdges.filter(edge =>
     (inNavigation || !predicate || edge.predicate === predicate) &&
     (inNavigation || !domain || edge.domain === domain) &&
+    (inNavigation || !modality || edge.modality === modality) &&
     (!relationQuery || normalize(`${graph.terms[edge.source.object_id].headword} ${edge.label} ${graph.terms[edge.target.object_id].headword}`).includes(relationQuery)));
   const focusEdges = visibleEdges.filter(edge => edge.source.object_id === focus || edge.target.object_id === focus);
-  const mapKey = `${layer}\u0000${focus}\u0000${domain}\u0000${predicate}\u0000${relationQuery}`;
+  const mapKey = `${layer}\u0000${focus}\u0000${domain}\u0000${predicate}\u0000${modality}\u0000${relationQuery}`;
   if (mapKey !== previousMapKey) {
     map.update(focus, visibleEdges, layer);
     previousMapKey = mapKey;
@@ -98,9 +102,10 @@ function update() {
   status.textContent = `${shown} ${shown === 1 ? 'entry' : 'entries'} available${routed ? ` · ${routed} related term ${routed === 1 ? 'route' : 'routes'}` : ''}`;
   empty.hidden = shown !== 0 || routed !== 0;
   const next = new URL(location.href);
-  for (const key of ['cluster', 'relation', 'term', 'connected', 'q', 'status', 'domain', 'rq', 'map']) next.searchParams.delete(key);
+  for (const key of ['cluster', 'relation', 'term', 'connected', 'q', 'status', 'domain', 'modality', 'rq', 'map']) next.searchParams.delete(key);
   if (predicate) next.searchParams.set('relation', predicate);
   if (domain) next.searchParams.set('domain', domain);
+  if (!inNavigation && modality) next.searchParams.set('modality', modality);
   if (focus) next.searchParams.set('term', focus);
   if (connectedOnly.checked) next.searchParams.set('connected', '1');
   if (input.value) next.searchParams.set('q', input.value);
@@ -111,6 +116,7 @@ function update() {
 
 predicateSelect.value = graph.relations.some(edge => edge.predicate === params.get('relation')) ? params.get('relation') : '';
 domainSelect.value = graph.relations.some(edge => edge.domain === params.get('domain')) ? params.get('domain') : '';
+modalitySelect.value = ['asserted', 'possible'].includes(params.get('modality')) ? params.get('modality') : '';
 connectedOnly.checked = params.get('connected') === '1';
 input.value = params.get('q') ?? '';
 relationSearch.value = params.get('rq') ?? '';
@@ -118,7 +124,7 @@ if (params.get('map') === 'navigation') {
   const option = layerInputs.find(control => control.value === 'navigation');
   if (option) option.checked = true;
 }
-for (const control of [domainSelect, predicateSelect, termSelect, connectedOnly, coverageOnly,
+for (const control of [domainSelect, predicateSelect, modalitySelect, termSelect, connectedOnly, coverageOnly,
   input, relationSearch, ...layerInputs])
   control.addEventListener('input', update);
 document.querySelector('#expand-letters').addEventListener('click', () => {

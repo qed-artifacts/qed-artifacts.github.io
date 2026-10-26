@@ -68,13 +68,16 @@ from the private collection into this repository.
 
 When the tagged public content includes `relations/studio-working.v1.json`,
 the compiler shows its owner-approved working relationships separately from
-the archived reviewed graph. The default map centers the most connected term
-and groups its direct incoming and outgoing relationships by predicate.
-Selecting a neighboring term refocuses the map; domain, predicate, and
-relationship search filter it and the full accessible relation list. The map
-focus does not narrow that list. All terms, links, counts, and relationship
-labels derive from the validated tagged public collection. Aliases remain
-distinct navigation routes. `node scripts/test-glossary-relations-page.mjs`
+the archived reviewed graph. Quality is the fixed editorial center of the
+constellation. Its rings are layout, not a measure of conceptual closeness,
+importance, or evidence strength. A focused term shows scoped incoming and
+outgoing links, their recorded direction, and whether Studio marked a link
+possible. Connection theme, relation type, modality, and relationship search
+filter the map and the full accessible relation list. Map focus does not
+narrow that list. The separate Studio draft references and coverage view is
+navigation only. All terms, links, counts, and relationship labels derive
+from the validated tagged public collection. Aliases remain distinct
+navigation routes. `node scripts/test-glossary-relations-page.mjs`
 builds a local synthetic fixture under `out/glossary-relations-fixture/` for
 UI checks; it is not public dictionary content. The `--output SITE_FILE`
 builder option permits a local preview without changing the canonical page.

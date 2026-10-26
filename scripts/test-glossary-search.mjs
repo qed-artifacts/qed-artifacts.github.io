@@ -32,7 +32,7 @@ function interfaceFixture(graph = { relations: [], terms: {} }) {
     { dataset: { headword: 'Error' }, hidden: true }];
   const nodes = { '#term-search': input, '#search-status': { textContent: '' },
     '#no-results': { hidden: true },
-    '#predicate-filter': control(), '#domain-filter': control(),
+    '#predicate-filter': control(), '#domain-filter': control(), '#modality-filter': control(),
     '#term-filter': control(), '#relation-search': control(), '#connected-only': control(),
     '#coverage-only': control(), '#coverage-panel': { hidden: true },
     '#relation-status': { textContent: '' }, '#relation-count': { textContent: '' },
@@ -57,7 +57,7 @@ function interfaceFixture(graph = { relations: [], terms: {} }) {
   return { input, cards, routes, status: nodes['#search-status'], empty: nodes['#no-results'],
     connected: nodes['#connected-only'], groups,
     expand: nodes['#expand-letters'], collapse: nodes['#collapse-letters'],
-    term: nodes['#term-filter'], predicate: nodes['#predicate-filter'],
+    term: nodes['#term-filter'], predicate: nodes['#predicate-filter'], modality: nodes['#modality-filter'],
     relationSearch: nodes['#relation-search'], relationCount: nodes['#relation-count'],
     relationDetails: nodes['#relation-details'], stage: nodes['#graph-stage'],
     caption: nodes['#graph-caption'], relationRows, mapUpdates, layers,
@@ -110,6 +110,12 @@ test('constellation starts with all terms, then focuses without hiding unrelated
   assert.equal(view.mapUpdates.at(-1).focus, '');
   assert.equal(view.connected.disabled, true);
   assert.equal(view.relationCount.textContent, '2');
+  view.modality.value = 'possible';
+  view.modality.input();
+  assert.equal(view.mapUpdates.at(-1).edges.map(edge => edge.relation_id).join(','), 'two');
+  assert.equal(view.relationCount.textContent, '1');
+  view.modality.value = '';
+  view.modality.input();
   view.term.value = 'b';
   view.term.input();
   assert.equal(view.mapUpdates.at(-1).focus, 'b');
@@ -165,6 +171,7 @@ test('navigation view has its own route data and coverage facet without altering
   assert.equal(view.mapUpdates.at(-1).layer, 'navigation');
   assert.equal(view.mapUpdates.at(-1).edges.length, 1);
   assert.equal(view.coveragePanel.hidden, false);
+  assert.equal(view.modality.disabled, true);
   assert.match(view.caption.textContent, /Studio draft reference/);
   view.coverageOnly.checked = true;
   view.coverageOnly.input();
@@ -175,4 +182,5 @@ test('navigation view has its own route data and coverage facet without altering
   assert.equal(view.mapUpdates.at(-1).layer, 'meaning');
   assert.equal(view.mapUpdates.at(-1).edges.length, 1);
   assert.equal(view.coveragePanel.hidden, true);
+  assert.equal(view.modality.disabled, false);
 });
