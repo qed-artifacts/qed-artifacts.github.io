@@ -24,15 +24,15 @@ function interfaceFixture() {
   const routes = [{ dataset: { headword: 'Fitness' }, hidden: true },
     { dataset: { headword: 'Error' }, hidden: true }];
   const nodes = { '#term-search': input, '#search-status': { textContent: '' },
-    '#no-results': { hidden: true }, '#cluster-filter': control(),
-    '#predicate-filter': control(), '#status-filter': control(), '#domain-filter': control(),
+    '#no-results': { hidden: true },
+    '#predicate-filter': control(), '#domain-filter': control(),
     '#term-filter': control(), '#relation-search': control(), '#connected-only': control(),
     '#relation-status': { textContent: '' }, '#relation-count': { textContent: '' },
     '#relation-empty': { hidden: true }, '#graph-stage': { replaceChildren() {} },
     '#graph-caption': { textContent: '' }, '#graph-prev': control(),
     '#graph-next': control(), '#graph-page-status': { textContent: '' },
     '#expand-letters': control(), '#collapse-letters': control(),
-    '#graph-data': { textContent: JSON.stringify({ clusters: [], relations: [], terms: {} }) } };
+    '#graph-data': { textContent: JSON.stringify({ relations: [], terms: {} }) } };
   const document = { querySelector: selector => nodes[selector],
     querySelectorAll: selector => selector === '.entry' ? cards : selector === '.term-route' ? routes :
       selector === '.letter-group' ? groups : [] };
@@ -41,7 +41,7 @@ function interfaceFixture() {
     window: { addEventListener() {} }, requestAnimationFrame: fn => fn(),
     URL, URLSearchParams, Option: function (label, value) { return { label, value }; } });
   return { input, cards, routes, status: nodes['#search-status'], empty: nodes['#no-results'],
-    cluster: nodes['#cluster-filter'], connected: nodes['#connected-only'], groups,
+    connected: nodes['#connected-only'], groups,
     expand: nodes['#expand-letters'], collapse: nodes['#collapse-letters'] };
 }
 
@@ -56,7 +56,7 @@ test('scoped term routes appear as navigation without becoming entry counts', ()
   assert.equal(view.groups[1].open, true);
 });
 
-test('all-entry search remains available when no relation cluster is selected', () => {
+test('all-entry search remains available without a reviewed cluster filter', () => {
   const view = interfaceFixture();
   assert.equal(view.cards.every(card => !card.hidden), true);
   assert.equal(view.connected.disabled, true);
