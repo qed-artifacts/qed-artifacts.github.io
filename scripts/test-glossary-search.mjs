@@ -25,10 +25,12 @@ function interfaceFixture() {
     { dataset: { headword: 'Error' }, hidden: true }];
   const nodes = { '#term-search': input, '#search-status': { textContent: '' },
     '#no-results': { hidden: true }, '#cluster-filter': control(),
-    '#predicate-filter': control(), '#term-filter': control(), '#connected-only': control(),
+    '#predicate-filter': control(), '#status-filter': control(), '#domain-filter': control(),
+    '#term-filter': control(), '#relation-search': control(), '#connected-only': control(),
     '#relation-status': { textContent: '' }, '#relation-count': { textContent: '' },
     '#relation-empty': { hidden: true }, '#graph-stage': { replaceChildren() {} },
-    '#graph-caption': { textContent: '' },
+    '#graph-caption': { textContent: '' }, '#graph-prev': control(),
+    '#graph-next': control(), '#graph-page-status': { textContent: '' },
     '#expand-letters': control(), '#collapse-letters': control(),
     '#graph-data': { textContent: JSON.stringify({ clusters: [], relations: [], terms: {} }) } };
   const document = { querySelector: selector => nodes[selector],

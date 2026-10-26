@@ -13,22 +13,28 @@
 .explorer-copy{max-width:820px;margin:18px 0 22px;line-height:1.6}
 .explorer-controls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;align-items:end}
 .explorer-controls label{display:grid;gap:6px;color:var(--ink-soft);font:700 .72rem var(--mono);letter-spacing:.03em;text-transform:uppercase}
-.explorer-controls select{width:100%;min-height:42px;padding:8px 10px;border:1px solid var(--line);background:var(--white);color:var(--ink);font:400 .9rem var(--sans);text-transform:none;letter-spacing:normal}
+.explorer-controls select,.explorer-controls input[type=search]{width:100%;min-height:42px;padding:8px 10px;border:1px solid var(--line);background:var(--white);color:var(--ink);font:400 .9rem var(--sans);text-transform:none;letter-spacing:normal}
 .explorer-controls .focus-toggle{display:flex;align-items:center;gap:8px;grid-column:1/-1;min-height:30px;cursor:pointer}
 .explorer-controls :focus-visible,.relation-details a:focus-visible,.graph-node:focus-visible{outline:3px solid var(--green);outline-offset:2px}
 .graph-stage{margin-top:20px;overflow:auto;background:#f5f8f5;border:1px solid var(--line)}
 .graph-stage:empty{display:none}
 .graph-stage svg{display:block;max-width:none}
 .graph-edge{stroke:#146653;stroke-width:2.5}
-.graph-edge.distinguished-from{stroke:#87663c;stroke-dasharray:7 5}
+.graph-edge.working{stroke:#a46b22;stroke-dasharray:7 5}
+.graph-edge.reviewed.distinguished-from{stroke:#146653}
 .graph-node rect{fill:#fff;stroke:#146653;stroke-width:2}
 .graph-node:hover rect,.graph-node:focus-visible rect{fill:#e3f0e9}
 .graph-node text{font:700 12px var(--sans);fill:var(--ink);pointer-events:none}
 .graph-caption{line-height:1.5;margin:12px 0 20px}
+.graph-pages{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:10px 0;color:var(--muted);font-size:.82rem}
+.graph-pages button{padding:7px 10px;border:1px solid var(--line);background:var(--white);color:var(--green);cursor:pointer}
+.graph-pages button:disabled{opacity:.45;cursor:default}
 .relation-details{border-top:1px solid var(--line);padding-top:14px}
 .relation-details summary{cursor:pointer;color:var(--green);font-weight:700}
 .relation-details ul{list-style:none;padding:0;display:grid;gap:10px}
 .relation-row{padding:12px;border:1px solid var(--line);font-size:.9rem}
+.relation-badge{display:inline-block;margin-right:10px;padding:3px 7px;font:.68rem var(--mono);border:1px solid #146653;color:#146653}
+.relation-badge.working{border-color:#a46b22;color:#80511a;background:#fff8ed}
 .relation-row[hidden]{display:none}
 .relation-row>a{font-weight:700;color:var(--green)}
 .relation-row>span{margin:0 6px;color:var(--ink-soft)}

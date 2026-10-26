@@ -41,6 +41,12 @@ try {
 } catch (error) {
   if (error.code !== 'ENOENT') throw error;
 }
+let working = { edges: [], holds: { endpoint_reconciliation: 0, unresolved_predicate: 0, duplicate_working: 0 }, adopted_total: 0 };
+try {
+  working = JSON.parse(await fs.readFile(path.join(sourceRoot, 'relations', 'studio-working.v1.json'), 'utf8'));
+} catch (error) {
+  if (error.code !== 'ENOENT') throw error;
+}
 const esc = value => String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 const objects = [];
 for (const pointer of catalog.entries) {
@@ -57,18 +63,29 @@ for (const pointer of catalog.entries) {
 objects.sort((a, b) => a.headword.localeCompare(b.headword, 'en', { sensitivity: 'base' }) ||
   a.scope_label.localeCompare(b.scope_label, 'en', { sensitivity: 'base' }) || a.object_id.localeCompare(b.object_id));
 const byId = new Map(objects.map(item => [item.object_id, item]));
-const graphData = JSON.stringify({ clusters: graph.clusters, relations: graph.relations,
+const relations = [
+  ...graph.relations.map(edge => ({ ...edge, status: 'reviewed', domain: 'reviewed-glossary' })),
+  ...working.edges.map(edge => ({ relation_id: edge.edge_id, source: edge.source, target: edge.target,
+    predicate: edge.predicate, label: edge.predicate.replaceAll('-', ' '), status: 'working',
+    domain: edge.domain, modality: edge.modality, direction: edge.direction,
+    scope: edge.scope }))
+];
+const predicates = [...new Set(relations.map(edge => edge.predicate))].sort();
+const domains = [...new Set(relations.map(edge => edge.domain))].sort();
+const graphData = JSON.stringify({ clusters: graph.clusters, relations,
+  holds: working.holds,
   terms: Object.fromEntries(objects.map(item => [item.object_id, { headword: item.headword, scope: item.scope_label }])) })
   .replace(/</g, '\\u003c');
 const graphClusters = graph.clusters.map(cluster =>
   `<option value="${esc(cluster.cluster_id)}">${esc(cluster.title)} (${cluster.members.length})</option>`).join('');
-const relationRows = graph.relations.map(edge => {
+const relationRows = relations.map(edge => {
   const from = byId.get(edge.source.object_id);
   const to = byId.get(edge.target.object_id);
   if (!from || !to) throw Error(`Graph endpoint missing from current entries: ${edge.relation_id}`);
-  return `<li class="relation-row" data-relation="${esc(edge.relation_id)}" data-source="${esc(edge.source.object_id)}" data-target="${esc(edge.target.object_id)}" data-predicate="${esc(edge.predicate)}" hidden>
+  return `<li class="relation-row" data-relation="${esc(edge.relation_id)}" data-status="${esc(edge.status)}" data-domain="${esc(edge.domain)}" hidden>
+  <span class="relation-badge ${esc(edge.status)}">${edge.status === 'reviewed' ? 'Reviewed relation' : 'Studio-approved working'}</span>
   <a href="#${esc(edge.source.object_id)}">${esc(from.headword)}</a> <span>${esc(edge.label)}</span> <a href="#${esc(edge.target.object_id)}">${esc(to.headword)}</a>
-  <p>${esc(edge.explanation)} <small>Scope: ${esc(edge.scope)}</small></p></li>`;
+  <p>${edge.explanation ? esc(edge.explanation) + ' ' : ''}<small>${esc(edge.scope)}</small></p></li>`;
 }).join('');
 const entries = objects.map(item => {
   const target = `https://github.com/qed-artifacts/dictionary-of-quality-content/blob/${encodeURIComponent(tag)}/${item.path}`;
@@ -136,17 +153,21 @@ const html = `<!doctype html>
     </div>
     <section class="relation-explorer" id="relationships" aria-labelledby="relationships-title">
       <div class="explorer-heading"><div><p class="eyebrow">Explore the collection</p><h2 id="relationships-title">Term relationships</h2></div>
-        <p id="relation-status" role="status" aria-live="polite">${graph.clusters.length} reviewed ${graph.clusters.length === 1 ? 'cluster' : 'clusters'} · ${graph.relations.length} reviewed ${graph.relations.length === 1 ? 'relationship' : 'relationships'}</p></div>
-      <p class="explorer-copy">Clusters group released terms for browsing. Lines show separately reviewed conceptual relationships; terms can belong to a cluster without a line. Scoped aliases remain in term navigation below.</p>
+        <p id="relation-status" role="status" aria-live="polite">${graph.relations.length} reviewed · ${working.edges.length} Studio-approved working relationships</p></div>
+      <p class="explorer-copy">Reviewed relations and Studio-approved working relations are separate layers. Working relations reflect an adopted Studio assertion and a headword match; their exact glossary sense and claim have not been independently validated. ${working.holds.endpoint_reconciliation + working.holds.unresolved_predicate} adopted assertions remain in the private resolution queue (${working.holds.endpoint_reconciliation} endpoint, ${working.holds.unresolved_predicate} predicate). ${working.holds.duplicate_working} duplicate assertions were collapsed.</p>
       <div class="explorer-controls">
         <label for="cluster-filter">Cluster <select id="cluster-filter"><option value="">All released entries</option>${graphClusters}</select></label>
-        <label for="predicate-filter">Relation <select id="predicate-filter"><option value="">All reviewed types</option><option value="is-a">Is a kind of</option><option value="distinguished-from">Distinguished from</option></select></label>
-        <label for="term-filter">Focus term <select id="term-filter"><option value="">All cluster terms</option></select></label>
+        <label for="status-filter">Status <select id="status-filter"><option value="">Both layers</option><option value="reviewed">Reviewed</option><option value="working">Studio-approved working</option></select></label>
+        <label for="domain-filter">Domain <select id="domain-filter"><option value="">All domains</option>${domains.map(value => `<option value="${esc(value)}">${esc(value.replaceAll('-', ' '))}</option>`).join('')}</select></label>
+        <label for="predicate-filter">Relation type <select id="predicate-filter"><option value="">All types</option>${predicates.map(value => `<option value="${esc(value)}">${esc(value.replaceAll('-', ' '))}</option>`).join('')}</select></label>
+        <label for="term-filter">Focus term <select id="term-filter"><option value="">All connected terms</option></select></label>
+        <label for="relation-search">Find relationship <input id="relation-search" type="search" placeholder="Search terms or relation type" autocomplete="off"></label>
         <label class="focus-toggle"><input type="checkbox" id="connected-only"> Show only connected terms</label>
       </div>
-      <div class="graph-stage" id="graph-stage" role="group" aria-label="Visual map of the selected cluster"></div>
-      <p class="graph-caption" id="graph-caption">${graph.clusters.length ? 'Select a cluster to explore its released terms and reviewed relationships.' : 'No reviewed relation cluster has been released yet. The full glossary remains available below.'}</p>
-      <details class="relation-details" open><summary>Relationship list <span id="relation-count">0</span></summary><ul id="relation-list">${relationRows}</ul><p id="relation-empty">No reviewed relationships in this selection.</p></details>
+      <div class="graph-stage" id="graph-stage" role="group" aria-label="Visual map of available relationships"></div>
+      <div class="graph-pages"><button type="button" id="graph-prev">Previous map section</button><span id="graph-page-status"></span><button type="button" id="graph-next">Next map section</button></div>
+      <p class="graph-caption" id="graph-caption">The map shows one bounded section at a time; the searchable list includes every matching relationship.</p>
+      <details class="relation-details" open><summary>Relationship list <span id="relation-count">0</span></summary><ul id="relation-list">${relationRows}</ul><p id="relation-empty">No relationships in this selection.</p></details>
       <script type="application/json" id="graph-data">${graphData}</script>
     </section>
     <div class="browser"><label for="term-search">Find a term or topic</label><input id="term-search" type="search" placeholder="Search released entries" autocomplete="off" aria-describedby="search-status"><p id="search-status" role="status" aria-live="polite">${objects.length} ${objects.length === 1 ? 'entry' : 'entries'} available</p></div>
@@ -169,4 +190,4 @@ if (check) {
 }
 console.log(JSON.stringify({ mode: check ? 'checked' : 'built', entries: objects.length,
   navigation_routes: navigation.routes.length, graph_clusters: graph.clusters.length,
-  graph_relations: graph.relations.length, tag, commit, output }));
+  graph_relations: graph.relations.length, studio_working_relations: working.edges.length, tag, commit, output }));

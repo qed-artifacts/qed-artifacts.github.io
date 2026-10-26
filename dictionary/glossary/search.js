@@ -5,8 +5,11 @@ const routes = [...document.querySelectorAll('.term-route')];
 const status = document.querySelector('#search-status');
 const empty = document.querySelector('#no-results');
 const clusterSelect = document.querySelector('#cluster-filter');
+const statusSelect = document.querySelector('#status-filter');
+const domainSelect = document.querySelector('#domain-filter');
 const predicateSelect = document.querySelector('#predicate-filter');
 const termSelect = document.querySelector('#term-filter');
+const relationSearch = document.querySelector('#relation-search');
 const connectedOnly = document.querySelector('#connected-only');
 const relationStatus = document.querySelector('#relation-status');
 const relationCount = document.querySelector('#relation-count');
@@ -14,6 +17,9 @@ const relationEmpty = document.querySelector('#relation-empty');
 const relationRows = [...document.querySelectorAll('.relation-row')];
 const stage = document.querySelector('#graph-stage');
 const caption = document.querySelector('#graph-caption');
+const graphPrev = document.querySelector('#graph-prev');
+const graphNext = document.querySelector('#graph-next');
+const graphPageStatus = document.querySelector('#graph-page-status');
 const graph = JSON.parse(document.querySelector('#graph-data').textContent);
 const normalize = value => value.normalize('NFKD').toLocaleLowerCase().replace(/\p{Diacritic}/gu, '').trim();
 const indexed = cards.map(card => [card, normalize(card.textContent)]);
@@ -21,6 +27,8 @@ const entryText = new Map(indexed.map(([card, content]) => [card.id, content]));
 const byCluster = new Map(graph.clusters.map(cluster => [cluster.cluster_id, cluster]));
 const byRelation = new Map(graph.relations.map(edge => [edge.relation_id, edge]));
 const params = new URLSearchParams(location.search);
+const pageSize = 24;
+let graphPage = Math.max(0, Number.parseInt(params.get('map') ?? '1', 10) - 1 || 0);
 const svgNS = 'http://www.w3.org/2000/svg';
 const svgElement = (tag, attributes = {}) => {
   const element = document.createElementNS(svgNS, tag);
@@ -36,7 +44,7 @@ function draw(nodes, edges) {
   const width = columns * 218 + 40;
   const height = rows * 116 + 36;
   const svg = svgElement('svg', { viewBox: `0 0 ${width} ${height}`, width, height,
-    role: 'group', 'aria-label': `${nodes.length} ${nodes.length === 1 ? 'term' : 'terms'} and ${edges.length} reviewed ${edges.length === 1 ? 'relationship' : 'relationships'}` });
+    role: 'group', 'aria-label': `${nodes.length} ${nodes.length === 1 ? 'term' : 'terms'} and ${edges.length} ${edges.length === 1 ? 'relationship' : 'relationships'}` });
   const defs = svgElement('defs');
   const marker = svgElement('marker', { id: 'relation-arrow', viewBox: '0 0 10 10', refX: 8,
     refY: 5, markerWidth: 7, markerHeight: 7, orient: 'auto-start-reverse' });
@@ -51,8 +59,8 @@ function draw(nodes, edges) {
     const b = positions.get(edge.target.object_id);
     if (!a || !b) continue;
     const line = svgElement('line', { x1: a.x + 84, y1: a.y + 29, x2: b.x + 84, y2: b.y + 29,
-      class: `graph-edge ${edge.predicate}` });
-    if (edge.predicate === 'is-a') line.setAttribute('marker-end', 'url(#relation-arrow)');
+      class: `graph-edge ${edge.status} ${edge.predicate}` });
+    if (edge.predicate === 'is-a' || edge.direction === 'source-to-target') line.setAttribute('marker-end', 'url(#relation-arrow)');
     const title = svgElement('title');
     title.textContent = `${graph.terms[edge.source.object_id].headword} ${edge.label} ${graph.terms[edge.target.object_id].headword}`;
     line.append(title);
@@ -77,57 +85,60 @@ function draw(nodes, edges) {
 
 function populateTerms(cluster, desired = '') {
   const current = desired || termSelect.value;
-  const members = cluster ? cluster.members.map(item => item.object_id) : [];
-  termSelect.replaceChildren(new Option('All cluster terms', ''));
+  const members = cluster ? cluster.members.map(item => item.object_id) :
+    [...new Set(graph.relations.flatMap(edge => [edge.source.object_id, edge.target.object_id]))];
+  members.sort((a, b) => graph.terms[a].headword.localeCompare(graph.terms[b].headword, 'en'));
+  termSelect.replaceChildren(new Option('All connected terms', ''));
   for (const id of members) termSelect.add(new Option(graph.terms[id].headword, id));
   termSelect.value = members.includes(current) ? current : '';
-  termSelect.disabled = !cluster;
+  termSelect.disabled = members.length === 0;
 }
 
-function update({ preserveTerm = true } = {}) {
+function update({ preserveTerm = true, resetPage = true } = {}) {
   const cluster = byCluster.get(clusterSelect.value);
   if (!preserveTerm) populateTerms(cluster);
-  if (!cluster) connectedOnly.checked = false;
-  connectedOnly.disabled = !cluster;
+  connectedOnly.disabled = graph.relations.length === 0;
+  if (resetPage) graphPage = 0;
   const predicate = predicateSelect.value;
+  const selectedStatus = statusSelect.value;
+  const domain = domainSelect.value;
   const focus = termSelect.value;
   const query = normalize(input.value);
+  const relationQuery = normalize(relationSearch.value);
   const members = new Set(cluster?.members.map(item => item.object_id) ?? []);
-  const edges = graph.relations.filter(edge => (!predicate || edge.predicate === predicate) &&
-    (!cluster || members.has(edge.source.object_id) || members.has(edge.target.object_id)));
-  const focused = focus ? new Set([focus, ...edges.filter(edge =>
-    edge.source.object_id === focus || edge.target.object_id === focus)
-    .flatMap(edge => [edge.source.object_id, edge.target.object_id])]) : null;
-  const visibleEdges = focused ? edges.filter(edge => focused.has(edge.source.object_id) &&
-    focused.has(edge.target.object_id)) : edges;
+  const visibleEdges = graph.relations.filter(edge =>
+    (!predicate || edge.predicate === predicate) &&
+    (!selectedStatus || edge.status === selectedStatus) &&
+    (!domain || edge.domain === domain) &&
+    (!cluster || members.has(edge.source.object_id) || members.has(edge.target.object_id)) &&
+    (!focus || edge.source.object_id === focus || edge.target.object_id === focus) &&
+    (!relationQuery || normalize(`${graph.terms[edge.source.object_id].headword} ${edge.predicate} ${graph.terms[edge.target.object_id].headword}`).includes(relationQuery)));
   const incident = new Set(visibleEdges.flatMap(edge => [edge.source.object_id, edge.target.object_id]));
-  const candidateNodes = cluster ? new Set([...members, ...incident]) : new Set();
-  const selectedNodes = [...candidateNodes].filter(id =>
-    (!focused || focused.has(id)) && (!connectedOnly.checked || incident.has(id)) &&
-    (!query || entryText.get(id)?.includes(query)));
-  selectedNodes.sort((a, b) => graph.terms[a].headword.localeCompare(graph.terms[b].headword, 'en') || a.localeCompare(b));
-  const nodeSet = new Set(selectedNodes);
-  const drawnEdges = visibleEdges.filter(edge => nodeSet.has(edge.source.object_id) && nodeSet.has(edge.target.object_id));
-  draw(selectedNodes, drawnEdges);
+  const pages = Math.max(1, Math.ceil(visibleEdges.length / pageSize));
+  graphPage = Math.min(graphPage, pages - 1);
+  const pageEdges = visibleEdges.slice(graphPage * pageSize, (graphPage + 1) * pageSize);
+  const selectedNodes = [...new Set(pageEdges.flatMap(edge => [edge.source.object_id, edge.target.object_id]))]
+    .sort((a, b) => graph.terms[a].headword.localeCompare(graph.terms[b].headword, 'en') || a.localeCompare(b));
+  draw(selectedNodes, pageEdges);
+  graphPrev.disabled = graphPage === 0;
+  graphNext.disabled = graphPage + 1 >= pages;
+  graphPageStatus.textContent = visibleEdges.length ? `Map section ${graphPage + 1} of ${pages}` : 'No map sections';
   for (const row of relationRows) {
     const edge = byRelation.get(row.dataset.relation);
-    row.hidden = !edge || (cluster && !members.has(edge.source.object_id) && !members.has(edge.target.object_id)) ||
-      (predicate && edge.predicate !== predicate) ||
-      (focus && edge.source.object_id !== focus && edge.target.object_id !== focus) ||
-      (cluster && !drawnEdges.includes(edge)) ||
-      (query && !normalize(`${graph.terms[edge.source.object_id].headword} ${graph.terms[edge.target.object_id].headword}`).includes(query));
+    row.hidden = !edge || !visibleEdges.includes(edge);
   }
-  const visibleRows = relationRows.filter(row => !row.hidden).length;
+  const visibleRows = visibleEdges.length;
   relationCount.textContent = String(visibleRows);
   relationEmpty.hidden = visibleRows !== 0;
-  relationStatus.textContent = cluster ? `${selectedNodes.length} ${selectedNodes.length === 1 ? 'term' : 'terms'} · ${drawnEdges.length} reviewed ${drawnEdges.length === 1 ? 'relationship' : 'relationships'}` :
-    `${graph.clusters.length} reviewed ${graph.clusters.length === 1 ? 'cluster' : 'clusters'} · ${graph.relations.length} reviewed ${graph.relations.length === 1 ? 'relationship' : 'relationships'}`;
-  caption.textContent = cluster ? `${cluster.title}: ${cluster.description} Solid arrows mean “is a kind of”; dashed lines mean “distinguished from”.` :
-    graph.clusters.length ? 'Choose a reviewed cluster to see its map. All released entries are listed below.' :
-      'No reviewed relation cluster has been released yet. The full glossary remains available below.';
+  const reviewedCount = visibleEdges.filter(edge => edge.status === 'reviewed').length;
+  relationStatus.textContent = `${visibleRows} relationships: ${reviewedCount} reviewed · ${visibleRows - reviewedCount} Studio-approved working`;
+  caption.textContent = visibleRows ?
+    `Map section ${graphPage + 1} shows ${pageEdges.length} of ${visibleRows} matching relationships. Green solid lines are reviewed; amber dashed lines are Studio-approved working. Use the list to access every match.` :
+    'No relationships match these filters.';
   let shown = 0;
   for (const [card, content] of indexed) {
-    const matches = (!cluster || nodeSet.has(card.id)) && (!query || content.includes(query));
+    const matches = (!cluster || members.has(card.id)) && (!connectedOnly.checked || incident.has(card.id)) &&
+      (!query || content.includes(query));
     card.hidden = !matches;
     if (matches) shown += 1;
   }
@@ -146,22 +157,32 @@ function update({ preserveTerm = true } = {}) {
   status.textContent = `${shown} ${shown === 1 ? 'entry' : 'entries'} available${routed ? ` · ${routed} related term ${routed === 1 ? 'route' : 'routes'}` : ''}`;
   empty.hidden = shown !== 0 || routed !== 0;
   const next = new URL(location.href);
-  for (const key of ['cluster', 'relation', 'term', 'connected', 'q']) next.searchParams.delete(key);
+  for (const key of ['cluster', 'relation', 'term', 'connected', 'q', 'status', 'domain', 'rq', 'map']) next.searchParams.delete(key);
   if (clusterSelect.value) next.searchParams.set('cluster', clusterSelect.value);
   if (predicate) next.searchParams.set('relation', predicate);
+  if (selectedStatus) next.searchParams.set('status', selectedStatus);
+  if (domain) next.searchParams.set('domain', domain);
   if (focus) next.searchParams.set('term', focus);
   if (connectedOnly.checked) next.searchParams.set('connected', '1');
   if (input.value) next.searchParams.set('q', input.value);
+  if (relationSearch.value) next.searchParams.set('rq', relationSearch.value);
+  if (graphPage) next.searchParams.set('map', String(graphPage + 1));
   history.replaceState(null, '', next);
 }
 
-clusterSelect.value = byCluster.has(params.get('cluster')) ? params.get('cluster') : (graph.clusters[0]?.cluster_id ?? '');
-predicateSelect.value = ['is-a', 'distinguished-from'].includes(params.get('relation')) ? params.get('relation') : '';
+clusterSelect.value = byCluster.has(params.get('cluster')) ? params.get('cluster') : '';
+predicateSelect.value = graph.relations.some(edge => edge.predicate === params.get('relation')) ? params.get('relation') : '';
+statusSelect.value = ['reviewed', 'working'].includes(params.get('status')) ? params.get('status') : '';
+domainSelect.value = graph.relations.some(edge => edge.domain === params.get('domain')) ? params.get('domain') : '';
 connectedOnly.checked = params.get('connected') === '1';
 input.value = params.get('q') ?? '';
+relationSearch.value = params.get('rq') ?? '';
 populateTerms(byCluster.get(clusterSelect.value), params.get('term') ?? '');
 clusterSelect.addEventListener('change', () => update({ preserveTerm: false }));
-for (const control of [predicateSelect, termSelect, connectedOnly, input]) control.addEventListener('input', () => update());
+for (const control of [statusSelect, domainSelect, predicateSelect, termSelect, connectedOnly, input, relationSearch])
+  control.addEventListener('input', () => update());
+graphPrev.addEventListener('click', () => { graphPage -= 1; update({ resetPage: false }); });
+graphNext.addEventListener('click', () => { graphPage += 1; update({ resetPage: false }); });
 document.querySelector('#expand-letters').addEventListener('click', () => {
   for (const group of letterGroups) if (!group.hidden) group.open = true;
 });
@@ -187,5 +208,5 @@ function revealHash() {
   requestAnimationFrame(() => target.scrollIntoView({ block: 'start' }));
 }
 window.addEventListener('hashchange', revealHash);
-update();
+update({ resetPage: false });
 if (location.hash) revealHash();
