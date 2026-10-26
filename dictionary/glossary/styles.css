@@ -38,6 +38,10 @@
 .constellation-dot.unlinked{fill:#b8c4b6}
 .constellation-dot.near{fill:#f1d19b}
 .constellation-dot.selected{fill:#ffc26d;stroke:#fff;stroke-width:2.5}
+.constellation-label{font-family:var(--sans);font-weight:700;paint-order:stroke fill;stroke:#10241c;stroke-width:5;stroke-linejoin:round}
+.constellation-label.selected{fill:#ffe4ad;font-size:25px;opacity:1}
+.constellation-label.neighbor{fill:#e9f9ef;font-size:17px;opacity:.5;cursor:pointer}
+.constellation-label.neighbor:hover{opacity:1}
 .constellation-detail{width:min(100%,900px);min-height:80px;padding:16px 20px;background:var(--white);border:1px solid var(--line);border-left:4px solid var(--green)}
 .constellation-detail-heading{display:flex;align-items:baseline;gap:8px 20px;flex-wrap:wrap}
 .constellation-detail strong{font:400 clamp(1.35rem,2vw,1.8rem)/1.15 var(--serif);overflow-wrap:break-word}
