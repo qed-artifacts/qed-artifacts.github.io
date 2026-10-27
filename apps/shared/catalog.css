@@ -6,12 +6,12 @@
 .catalog-heading{display:grid;grid-template-columns:1fr minmax(260px,.45fr);gap:48px;align-items:end;margin-bottom:46px}
 .catalog-heading h2{margin:0}
 .app-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
-.app-card,.catalog-empty{min-height:290px;padding:clamp(26px,3vw,42px);border:1px solid var(--line);background:#faf9f5}
+.app-card,.catalog-empty{min-height:290px;padding:clamp(26px,3vw,42px);border:1px solid var(--line);background:#f8faf9}
 .app-card-top{display:flex;justify-content:space-between;gap:16px;margin-bottom:50px;font-family:var(--mono);font-size:.67rem;text-transform:uppercase}
 .app-status{color:var(--green);font-weight:800}.app-version{color:var(--muted)}
 .app-card h3,.catalog-empty h3{font-family:var(--serif);font-size:1.7rem;font-weight:400}
 .app-card p,.catalog-empty>p:last-child{color:var(--muted);font-size:.9rem}
-.catalog-empty{grid-column:1/-1;min-height:240px;background:var(--yellow-soft);border-color:#dfcb8d}
+.catalog-empty{grid-column:1/-1;min-height:240px;background:var(--yellow-soft);border-color:#d9c7a5}
 .catalog-principles{display:grid;grid-template-columns:minmax(280px,.55fr) minmax(560px,1.45fr);gap:clamp(48px,8vw,110px);padding:clamp(72px,9vw,124px) clamp(24px,5vw,76px);background:var(--paper-deep)}
 .principle-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line)}
 .principle-grid article{padding:30px;background:var(--white)}
