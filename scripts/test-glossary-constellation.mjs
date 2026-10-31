@@ -17,10 +17,12 @@ test('every released term has one stable map position, including terms without d
   assert.equal(layout.nodes.length, Object.keys(graph.terms).length);
   assert.equal(new Set(layout.nodes.map(node => node.id)).size, layout.nodes.length);
   assert.equal(layout.summary.connected + layout.summary.unlinked, layout.summary.total);
-  assert.equal(layout.summary.total, 878);
+  const renderedEntryCount = (html.match(/<article class="entry"/g) ?? []).length;
+  assert.equal(layout.summary.total, renderedEntryCount,
+    'constellation includes every rendered released entry');
   assert.equal(graph.relations.length, 505);
   assert.equal(layout.summary.connected, 261);
-  assert.equal(layout.summary.unlinked, 617);
+  assert.equal(layout.summary.unlinked, renderedEntryCount - layout.summary.connected);
   const quality = layout.nodes.find(node => node.id === 'glossary.quality.quality-management');
   assert.deepEqual([quality.x, quality.y], [layout.size / 2, layout.size / 2],
     'Quality remains the central editorial anchor');
